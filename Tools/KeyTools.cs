@@ -9,7 +9,7 @@ namespace RedisMCPSharp.Tools;
 [McpServerToolType]
 public sealed class KeyTools
 {
-    [McpServerTool(Name = "exists"),
+    [McpServerTool(Name = "redis_exists"),
      Description("Return the count of keys that exist out of the given list. EXISTS supports multiple keys atomically.")]
     public static async Task<string> Exists(
         RedisRegistry reg,
@@ -21,7 +21,7 @@ public sealed class KeyTools
         return JsonSerializer.Serialize(new { alias, queried = keys.Length, exists = count }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "type"),
+    [McpServerTool(Name = "redis_type"),
      Description("Return the Redis type of a key: string, list, hash, set, zset, stream, or none if the key doesn't exist.")]
     public static async Task<string> Type(
         RedisRegistry reg,
@@ -33,7 +33,7 @@ public sealed class KeyTools
         return JsonSerializer.Serialize(new { alias, key, type = type.ToString().ToLowerInvariant() }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "ttl"),
+    [McpServerTool(Name = "redis_ttl"),
      Description("Return seconds until expiry (-1 = no TTL set, -2 = key doesn't exist). Also returns ms precision via pttl.")]
     public static async Task<string> Ttl(
         RedisRegistry reg,
@@ -45,7 +45,7 @@ public sealed class KeyTools
         return JsonSerializer.Serialize(new { alias, key, ttlSeconds = t?.TotalSeconds, ttlMs = t?.TotalMilliseconds }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "expire"),
+    [McpServerTool(Name = "redis_expire"),
      Description("Set or update a key's TTL. Refused when Redis:ReadOnly=true.")]
     public static async Task<string> Expire(
         RedisRegistry reg,
@@ -59,7 +59,7 @@ public sealed class KeyTools
         return JsonSerializer.Serialize(new { alias, key, set = ok }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "persist"),
+    [McpServerTool(Name = "redis_persist"),
      Description("Remove a key's TTL so it lives forever. Refused when Redis:ReadOnly=true.")]
     public static async Task<string> Persist(
         RedisRegistry reg,
@@ -72,7 +72,7 @@ public sealed class KeyTools
         return JsonSerializer.Serialize(new { alias, key, persisted = ok }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "rename"),
+    [McpServerTool(Name = "redis_rename"),
      Description("Rename a key. Fails if the destination already exists unless overwrite=true. Refused when Redis:ReadOnly=true.")]
     public static async Task<string> Rename(
         RedisRegistry reg,
@@ -87,7 +87,7 @@ public sealed class KeyTools
         return JsonSerializer.Serialize(new { alias, from, to, ok }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "del"),
+    [McpServerTool(Name = "redis_del"),
      Description("Delete one or more keys. Returns count deleted. Refused when Redis:ReadOnly=true.")]
     public static async Task<string> Del(
         RedisRegistry reg,
@@ -100,7 +100,7 @@ public sealed class KeyTools
         return JsonSerializer.Serialize(new { alias, requested = keys.Length, deleted }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "object_encoding"),
+    [McpServerTool(Name = "redis_object_encoding"),
      Description("OBJECT ENCODING — internal representation Redis uses for the key (e.g. embstr, raw, listpack, hashtable, skiplist). Diagnostic for memory-tuning.")]
     public static async Task<string> ObjectEncoding(
         RedisRegistry reg,
@@ -112,7 +112,7 @@ public sealed class KeyTools
         return JsonSerializer.Serialize(new { alias, key, encoding = enc }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "object_idletime"),
+    [McpServerTool(Name = "redis_object_idletime"),
      Description("OBJECT IDLETIME — seconds since the key was last accessed. Heuristic for finding candidates to evict.")]
     public static async Task<string> ObjectIdletime(
         RedisRegistry reg,
@@ -124,7 +124,7 @@ public sealed class KeyTools
         return JsonSerializer.Serialize(new { alias, key, idleSeconds = v }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "scan"),
+    [McpServerTool(Name = "redis_scan"),
      Description("Non-blocking key scan. Uses Redis SCAN under the hood — safe on production. Capped at Redis:MaxItems keys per call.")]
     public static async Task<string> Scan(
         RedisRegistry reg,
@@ -163,7 +163,7 @@ public sealed class KeyTools
         return JsonSerializer.Serialize(new { alias, pattern, type, returned = keys.Count, truncated = keys.Count == cap, keys }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "scan_with_values"),
+    [McpServerTool(Name = "redis_scan_with_values"),
      Description("Combines SCAN + GET-style fetch. For each matched key, returns key, type, ttl, and (for strings/hashes/sets/lists with small contents) a value preview. Heavier than scan() — cap with `max` carefully.")]
     public static async Task<string> ScanWithValues(
         RedisRegistry reg,
@@ -208,7 +208,7 @@ public sealed class KeyTools
         return JsonSerializer.Serialize(new { alias, pattern, type, returned = results.Count, truncated = results.Count == cap, items = results }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "search_keys"),
+    [McpServerTool(Name = "redis_search_keys"),
      Description("Glob pattern search across the keyspace (wraps SCAN). For full-text indexed search (RediSearch FT.SEARCH) use `execute` with the FT.* commands.")]
     public static Task<string> SearchKeys(
         RedisRegistry reg,

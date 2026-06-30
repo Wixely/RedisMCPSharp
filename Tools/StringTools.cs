@@ -10,7 +10,7 @@ namespace RedisMCPSharp.Tools;
 [McpServerToolType]
 public sealed class StringTools
 {
-    [McpServerTool(Name = "get"),
+    [McpServerTool(Name = "redis_get"),
      Description("GET — return the string value at key. Returns null if the key doesn't exist. Use `get_deserialised` if the value is JSON / BSON / Protobuf.")]
     public static async Task<string> Get(
         RedisRegistry reg,
@@ -26,7 +26,7 @@ public sealed class StringTools
         return JsonSerializer.Serialize(new { alias, key, exists = true, value = text, truncated, lengthBytes = ((byte[]?)v)?.Length }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "mget"),
+    [McpServerTool(Name = "redis_mget"),
      Description("MGET — get multiple string values in one round-trip. Returns parallel array, with nulls for missing keys.")]
     public static async Task<string> MGet(
         RedisRegistry reg,
@@ -45,7 +45,7 @@ public sealed class StringTools
         return JsonSerializer.Serialize(new { alias, count = keys.Length, items = rows }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "get_deserialised"),
+    [McpServerTool(Name = "redis_get_deserialised"),
      Description("GET + auto-detect content type (JSON / BSON / Protobuf / UTF-8 / binary) and return a structured representation. Useful when the value is a serialised object and you don't want to look at base64.")]
     public static async Task<string> GetDeserialised(
         RedisRegistry reg,
@@ -67,7 +67,7 @@ public sealed class StringTools
         }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "detect_format"),
+    [McpServerTool(Name = "redis_detect_format"),
      Description("Sniff a value (read by key) and return only the detected content type (no decoded payload). Cheap diagnostic for surveying what's stored.")]
     public static async Task<string> DetectFormat(
         RedisRegistry reg,
@@ -81,7 +81,7 @@ public sealed class StringTools
         return JsonSerializer.Serialize(new { alias, key, exists = true, lengthBytes = raw.Length, kind = decoded.Kind.ToString(), note = decoded.Note }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "set"),
+    [McpServerTool(Name = "redis_set"),
      Description("SET — write a string value. Supports TTL (seconds) and NX (only-if-missing) / XX (only-if-exists). Refused when Redis:ReadOnly=true.")]
     public static async Task<string> Set(
         RedisRegistry reg,
@@ -105,7 +105,7 @@ public sealed class StringTools
         return JsonSerializer.Serialize(new { alias, key, written = ok, ttlSeconds, mode = string.IsNullOrEmpty(mode) ? null : mode }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "mset"),
+    [McpServerTool(Name = "redis_mset"),
      Description("MSET — write multiple key/value strings atomically. Pass an object: { \"k1\": \"v1\", \"k2\": \"v2\" }. Refused when Redis:ReadOnly=true.")]
     public static async Task<string> MSet(
         RedisRegistry reg,
@@ -119,7 +119,7 @@ public sealed class StringTools
         return JsonSerializer.Serialize(new { alias, count = pairs.Count, ok }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "append"),
+    [McpServerTool(Name = "redis_append"),
      Description("APPEND — append to an existing string (creates if missing). Returns new length. Refused when Redis:ReadOnly=true.")]
     public static async Task<string> Append(
         RedisRegistry reg,
@@ -133,7 +133,7 @@ public sealed class StringTools
         return JsonSerializer.Serialize(new { alias, key, newLength = newLen }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "incrby"),
+    [McpServerTool(Name = "redis_incrby"),
      Description("INCRBY — atomically increment an integer-valued string by N (negative for DECRBY). Refused when Redis:ReadOnly=true.")]
     public static async Task<string> IncrBy(
         RedisRegistry reg,

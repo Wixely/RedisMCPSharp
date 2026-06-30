@@ -11,7 +11,7 @@ public sealed class CollectionTools
 {
     // ───────────────────────── HASH ─────────────────────────
 
-    [McpServerTool(Name = "hget"),
+    [McpServerTool(Name = "redis_hget"),
      Description("HGET — value of a single field in a hash. Returns null if the field doesn't exist.")]
     public static async Task<string> HGet(
         RedisRegistry reg,
@@ -24,7 +24,7 @@ public sealed class CollectionTools
         return JsonSerializer.Serialize(new { alias, key, field, value = v.IsNull ? null : (string?)v }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "hgetall"),
+    [McpServerTool(Name = "redis_hgetall"),
      Description("HGETALL — every field/value in a hash. Cap on returned entries (Redis:MaxItems).")]
     public static async Task<string> HGetAll(
         RedisRegistry reg,
@@ -38,7 +38,7 @@ public sealed class CollectionTools
         return JsonSerializer.Serialize(new { alias, key, count = entries.Length, returned = rows.Count, truncated = entries.Length > cap, fields = rows }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "hkeys"),
+    [McpServerTool(Name = "redis_hkeys"),
      Description("HKEYS — list of field names in a hash.")]
     public static async Task<string> HKeys(
         RedisRegistry reg,
@@ -50,7 +50,7 @@ public sealed class CollectionTools
         return JsonSerializer.Serialize(new { alias, key, count = fields.Length, fields = fields.Select(f => (string?)f) }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "hset"),
+    [McpServerTool(Name = "redis_hset"),
      Description("HSET — write one or more hash field/values. Pass `fields` as an object. Refused when Redis:ReadOnly=true.")]
     public static async Task<string> HSet(
         RedisRegistry reg,
@@ -65,7 +65,7 @@ public sealed class CollectionTools
         return JsonSerializer.Serialize(new { alias, key, written = fields.Count }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "hdel"),
+    [McpServerTool(Name = "redis_hdel"),
      Description("HDEL — remove one or more fields from a hash. Refused when Redis:ReadOnly=true.")]
     public static async Task<string> HDel(
         RedisRegistry reg,
@@ -81,7 +81,7 @@ public sealed class CollectionTools
 
     // ───────────────────────── LIST ─────────────────────────
 
-    [McpServerTool(Name = "lrange"),
+    [McpServerTool(Name = "redis_lrange"),
      Description("LRANGE — slice a list by index. Negative indices count from the end (-1 = last). Default returns the whole list, capped at Redis:MaxItems.")]
     public static async Task<string> LRange(
         RedisRegistry reg,
@@ -97,7 +97,7 @@ public sealed class CollectionTools
         return JsonSerializer.Serialize(new { alias, key, count = items.Length, returned = Math.Min(items.Length, cap), truncated = items.Length > cap, items = trimmed }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "llen"),
+    [McpServerTool(Name = "redis_llen"),
      Description("LLEN — number of elements in a list.")]
     public static async Task<string> LLen(
         RedisRegistry reg,
@@ -109,7 +109,7 @@ public sealed class CollectionTools
         return JsonSerializer.Serialize(new { alias, key, length = n }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "lpush"),
+    [McpServerTool(Name = "redis_lpush"),
      Description("LPUSH — prepend one or more values to a list. Returns new list length. Refused when Redis:ReadOnly=true.")]
     public static async Task<string> LPush(
         RedisRegistry reg,
@@ -123,7 +123,7 @@ public sealed class CollectionTools
         return JsonSerializer.Serialize(new { alias, key, newLength = n }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "rpush"),
+    [McpServerTool(Name = "redis_rpush"),
      Description("RPUSH — append one or more values to a list. Refused when Redis:ReadOnly=true.")]
     public static async Task<string> RPush(
         RedisRegistry reg,
@@ -139,7 +139,7 @@ public sealed class CollectionTools
 
     // ───────────────────────── SET ─────────────────────────
 
-    [McpServerTool(Name = "smembers"),
+    [McpServerTool(Name = "redis_smembers"),
      Description("SMEMBERS — all members of a set. Capped at Redis:MaxItems.")]
     public static async Task<string> SMembers(
         RedisRegistry reg,
@@ -153,7 +153,7 @@ public sealed class CollectionTools
         return JsonSerializer.Serialize(new { alias, key, count = members.Length, returned = Math.Min(members.Length, cap), truncated = members.Length > cap, members = trimmed }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "sismember"),
+    [McpServerTool(Name = "redis_sismember"),
      Description("SISMEMBER — test whether a value is in a set. Returns boolean.")]
     public static async Task<string> SIsMember(
         RedisRegistry reg,
@@ -166,7 +166,7 @@ public sealed class CollectionTools
         return JsonSerializer.Serialize(new { alias, key, member, isMember = ok }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "sadd"),
+    [McpServerTool(Name = "redis_sadd"),
      Description("SADD — add one or more members to a set. Returns the count that were newly added. Refused when Redis:ReadOnly=true.")]
     public static async Task<string> SAdd(
         RedisRegistry reg,
@@ -180,7 +180,7 @@ public sealed class CollectionTools
         return JsonSerializer.Serialize(new { alias, key, requested = members.Length, added }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "srem"),
+    [McpServerTool(Name = "redis_srem"),
      Description("SREM — remove members from a set. Refused when Redis:ReadOnly=true.")]
     public static async Task<string> SRem(
         RedisRegistry reg,
@@ -196,7 +196,7 @@ public sealed class CollectionTools
 
     // ───────────────────────── SORTED SET ─────────────────────────
 
-    [McpServerTool(Name = "zrange"),
+    [McpServerTool(Name = "redis_zrange"),
      Description("ZRANGE — slice a sorted set by index. Returns members and (optionally) their scores. Capped at Redis:MaxItems.")]
     public static async Task<string> ZRange(
         RedisRegistry reg,
@@ -225,7 +225,7 @@ public sealed class CollectionTools
         }
     }
 
-    [McpServerTool(Name = "zadd"),
+    [McpServerTool(Name = "redis_zadd"),
      Description("ZADD — add member(s) to a sorted set with scores. Pass an object: { \"member\": score }. Refused when Redis:ReadOnly=true.")]
     public static async Task<string> ZAdd(
         RedisRegistry reg,
@@ -240,7 +240,7 @@ public sealed class CollectionTools
         return JsonSerializer.Serialize(new { alias, key, requested = members.Count, added }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "zrem"),
+    [McpServerTool(Name = "redis_zrem"),
      Description("ZREM — remove member(s) from a sorted set. Refused when Redis:ReadOnly=true.")]
     public static async Task<string> ZRem(
         RedisRegistry reg,
@@ -256,7 +256,7 @@ public sealed class CollectionTools
 
     // ───────────────────────── STREAM ─────────────────────────
 
-    [McpServerTool(Name = "xrange"),
+    [McpServerTool(Name = "redis_xrange"),
      Description("XRANGE — read entries from a Redis Stream by ID range. Defaults to whole stream up to count.")]
     public static async Task<string> XRange(
         RedisRegistry reg,
@@ -276,7 +276,7 @@ public sealed class CollectionTools
         return JsonSerializer.Serialize(new { alias, key, returned = entries.Length, items }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "xlen"),
+    [McpServerTool(Name = "redis_xlen"),
      Description("XLEN — number of entries in a stream.")]
     public static async Task<string> XLen(
         RedisRegistry reg,
@@ -288,7 +288,7 @@ public sealed class CollectionTools
         return JsonSerializer.Serialize(new { alias, key, length = n }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "xadd"),
+    [McpServerTool(Name = "redis_xadd"),
      Description("XADD — append an entry to a stream. Returns the assigned entry ID. Refused when Redis:ReadOnly=true.")]
     public static async Task<string> XAdd(
         RedisRegistry reg,

@@ -13,7 +13,7 @@ namespace RedisMCPSharp.Tools;
 [McpServerToolType]
 public sealed class ClusterTools
 {
-    [McpServerTool(Name = "cluster_info"),
+    [McpServerTool(Name = "redis_cluster_info"),
      Description("CLUSTER INFO — cluster state, known nodes, slot coverage, epoch, etc.")]
     public static async Task<string> ClusterInfo(
         RedisRegistry reg,
@@ -26,7 +26,7 @@ public sealed class ClusterTools
         return JsonSerializer.Serialize(new { alias, isCluster = inst.IsCluster, info = dict }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "cluster_nodes"),
+    [McpServerTool(Name = "redis_cluster_nodes"),
      Description("CLUSTER NODES — parsed list of every node (id, endpoint, flags, master/replica, slot ranges, ping/pong, link state).")]
     public static async Task<string> ClusterNodes(
         RedisRegistry reg,
@@ -54,7 +54,7 @@ public sealed class ClusterTools
         return JsonSerializer.Serialize(new { alias, nodes }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "cluster_slots"),
+    [McpServerTool(Name = "redis_cluster_slots"),
      Description("CLUSTER SHARDS / SLOTS — slot ranges and the nodes serving them. Useful for spotting unbalanced shards.")]
     public static async Task<string> ClusterSlots(
         RedisRegistry reg,
@@ -68,7 +68,7 @@ public sealed class ClusterTools
         return JsonSerializer.Serialize(new { alias, command = $"CLUSTER {cmd}", raw = raw.ToString() }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "cluster_keyslot"),
+    [McpServerTool(Name = "redis_cluster_keyslot"),
      Description("CLUSTER KEYSLOT — which slot (0–16383) a given key would hash to.")]
     public static async Task<string> ClusterKeyslot(
         RedisRegistry reg,
@@ -80,7 +80,7 @@ public sealed class ClusterTools
         return JsonSerializer.Serialize(new { alias, key, slot }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "cluster_countkeysinslot"),
+    [McpServerTool(Name = "redis_cluster_countkeysinslot"),
      Description("CLUSTER COUNTKEYSINSLOT — count of keys mapped to a given slot. Use cluster_keyslot first to find the slot for a representative key.")]
     public static async Task<string> ClusterCountKeysInSlot(
         RedisRegistry reg,

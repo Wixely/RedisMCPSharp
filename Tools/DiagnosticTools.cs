@@ -13,7 +13,7 @@ namespace RedisMCPSharp.Tools;
 [McpServerToolType]
 public sealed class DiagnosticTools
 {
-    [McpServerTool(Name = "slowlog_get"),
+    [McpServerTool(Name = "redis_slowlog_get"),
      Description("SLOWLOG GET — N most recent slow commands (id, timestamp, duration µs, command argv, client name/addr if available). Use to find queries eating CPU.")]
     public static async Task<string> SlowlogGet(
         RedisRegistry reg,
@@ -39,7 +39,7 @@ public sealed class DiagnosticTools
         return JsonSerializer.Serialize(new { alias, count = raw.Length, entries = rows }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "slowlog_len"),
+    [McpServerTool(Name = "redis_slowlog_len"),
      Description("SLOWLOG LEN — current number of entries in the slow log.")]
     public static async Task<string> SlowlogLen(
         RedisRegistry reg,
@@ -50,7 +50,7 @@ public sealed class DiagnosticTools
         return JsonSerializer.Serialize(new { alias, length = len }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "slowlog_reset"),
+    [McpServerTool(Name = "redis_slowlog_reset"),
      Description("SLOWLOG RESET — wipe the slow log. Refused when Redis:ReadOnly=true (it's not destructive to data but is an admin op).")]
     public static async Task<string> SlowlogReset(
         RedisRegistry reg,
@@ -62,7 +62,7 @@ public sealed class DiagnosticTools
         return JsonSerializer.Serialize(new { alias, reset = true }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "memory_usage"),
+    [McpServerTool(Name = "redis_memory_usage"),
      Description("MEMORY USAGE — bytes one specific key (and its overhead) is taking on the heap. Sampling depth optional.")]
     public static async Task<string> MemoryUsage(
         RedisRegistry reg,
@@ -75,7 +75,7 @@ public sealed class DiagnosticTools
         return JsonSerializer.Serialize(new { alias, key, bytes }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "memory_stats"),
+    [McpServerTool(Name = "redis_memory_stats"),
      Description("MEMORY STATS — global memory accounting (peak, fragmentation, allocator chunks, dataset bytes, replication backlog, …). Wide output.")]
     public static async Task<string> MemoryStats(
         RedisRegistry reg,
@@ -93,7 +93,7 @@ public sealed class DiagnosticTools
         return JsonSerializer.Serialize(new { alias, stats = dict }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "memory_doctor"),
+    [McpServerTool(Name = "redis_memory_doctor"),
      Description("MEMORY DOCTOR — Redis' own narrative diagnosis of memory hotspots. Plain-English heuristic output.")]
     public static async Task<string> MemoryDoctor(
         RedisRegistry reg,
@@ -104,7 +104,7 @@ public sealed class DiagnosticTools
         return JsonSerializer.Serialize(new { alias, report = raw }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "client_list"),
+    [McpServerTool(Name = "redis_client_list"),
      Description("CLIENT LIST — every connected client (id, addr, fd, name, age, idle, last command, db). Heavy on big servers — filter with `type` when possible.")]
     public static async Task<string> ClientList(
         RedisRegistry reg,
@@ -129,7 +129,7 @@ public sealed class DiagnosticTools
         return JsonSerializer.Serialize(new { alias, type, clients = rows }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "client_kill"),
+    [McpServerTool(Name = "redis_client_kill"),
      Description("CLIENT KILL — close a specific client by id or addr. Refused when Redis:ReadOnly=true. Use to evict misbehaving consumers.")]
     public static async Task<string> ClientKill(
         RedisRegistry reg,
@@ -148,7 +148,7 @@ public sealed class DiagnosticTools
         return JsonSerializer.Serialize(new { alias, id, addr, result = result.ToString() }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "config_get"),
+    [McpServerTool(Name = "redis_config_get"),
      Description("CONFIG GET — fetch one or more runtime config parameters by glob. Examples: \"maxmemory\", \"max*\", \"*\".")]
     public static async Task<string> ConfigGet(
         RedisRegistry reg,
@@ -163,7 +163,7 @@ public sealed class DiagnosticTools
         return JsonSerializer.Serialize(new { alias, pattern, parameters = dict }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "config_set"),
+    [McpServerTool(Name = "redis_config_set"),
      Description("CONFIG SET — change a runtime parameter (e.g. maxmemory, timeout). Refused when Redis:ReadOnly=true and double-gated by Redis:AllowDangerous (changing config is administrative).")]
     public static async Task<string> ConfigSet(
         RedisRegistry reg,
@@ -178,7 +178,7 @@ public sealed class DiagnosticTools
         return JsonSerializer.Serialize(new { alias, parameter, value, result = result.ToString() }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "config_resetstat"),
+    [McpServerTool(Name = "redis_config_resetstat"),
      Description("CONFIG RESETSTAT — reset stats reported by INFO (commandstats, keyspace hits/misses, evictions). Refused when Redis:ReadOnly=true.")]
     public static async Task<string> ConfigResetStat(
         RedisRegistry reg,
@@ -190,7 +190,7 @@ public sealed class DiagnosticTools
         return JsonSerializer.Serialize(new { alias, reset = true }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "latency_history"),
+    [McpServerTool(Name = "redis_latency_history"),
      Description("LATENCY HISTORY <event> — recent latency spikes for a given event (e.g. \"fork\", \"event-loop\", \"command\"). Returns [timestamp, ms] pairs.")]
     public static async Task<string> LatencyHistory(
         RedisRegistry reg,
@@ -211,7 +211,7 @@ public sealed class DiagnosticTools
         return JsonSerializer.Serialize(new { alias, @event, samples = rows }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "latency_latest"),
+    [McpServerTool(Name = "redis_latency_latest"),
      Description("LATENCY LATEST — most recent spike for every tracked event. Quickest \"is anything bad happening right now?\" check.")]
     public static async Task<string> LatencyLatest(
         RedisRegistry reg,
@@ -233,7 +233,7 @@ public sealed class DiagnosticTools
         return JsonSerializer.Serialize(new { alias, events = rows }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "latency_reset"),
+    [McpServerTool(Name = "redis_latency_reset"),
      Description("LATENCY RESET — clear the latency history. Refused when Redis:ReadOnly=true.")]
     public static async Task<string> LatencyReset(
         RedisRegistry reg,
@@ -249,7 +249,7 @@ public sealed class DiagnosticTools
         return JsonSerializer.Serialize(new { alias, cleared }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "lastsave"),
+    [McpServerTool(Name = "redis_lastsave"),
      Description("LASTSAVE — UNIX timestamp of the last successful RDB save. Compare against now() to see how stale a snapshot is.")]
     public static async Task<string> LastSave(
         RedisRegistry reg,
@@ -260,7 +260,7 @@ public sealed class DiagnosticTools
         return JsonSerializer.Serialize(new { alias, lastSaveUtc = ts, lastSaveUnix = new DateTimeOffset(ts, TimeSpan.Zero).ToUnixTimeSeconds() }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "command_count"),
+    [McpServerTool(Name = "redis_command_count"),
      Description("COMMAND COUNT — number of commands the server knows about (built-in + modules + functions).")]
     public static async Task<string> CommandCount(
         RedisRegistry reg,
@@ -271,7 +271,7 @@ public sealed class DiagnosticTools
         return JsonSerializer.Serialize(new { alias, commands = n }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "module_list"),
+    [McpServerTool(Name = "redis_module_list"),
      Description("MODULE LIST — loaded Redis modules (RediSearch, RedisJSON, RedisBloom, RedisTimeSeries, …) with names and versions. Tells you which capabilities are available.")]
     public static async Task<string> ModuleList(
         RedisRegistry reg,
@@ -290,7 +290,7 @@ public sealed class DiagnosticTools
         return JsonSerializer.Serialize(new { alias, modules = rows }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "function_list"),
+    [McpServerTool(Name = "redis_function_list"),
      Description("FUNCTION LIST — registered Redis Functions (7.0+) with engine and per-library function names. Returns empty array on older versions.")]
     public static async Task<string> FunctionList(
         RedisRegistry reg,
@@ -311,7 +311,7 @@ public sealed class DiagnosticTools
         return JsonSerializer.Serialize(new { alias, supported = true, libraries = libs }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "debug_object"),
+    [McpServerTool(Name = "redis_debug_object"),
      Description("DEBUG OBJECT — low-level encoding/refcount/serialised-length for one key. Doubly-gated by Redis:AllowDangerous (DEBUG group is admin-only).")]
     public static async Task<string> DebugObject(
         RedisRegistry reg,

@@ -34,9 +34,11 @@
   <ItemGroup>
     <None Update="RedisMCPSharp.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
     <None Update="RedisMCPSharp.*.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <DependentUpon>RedisMCPSharp.json</DependentUpon>
     </None>
   </ItemGroup>

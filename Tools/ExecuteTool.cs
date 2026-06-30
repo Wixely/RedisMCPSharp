@@ -94,7 +94,7 @@ public sealed class ExecuteTool
         "CLIENT KILL", "CLIENT PAUSE", "CLIENT UNPAUSE", "CLIENT NO-EVICT",
     };
 
-    [McpServerTool(Name = "execute"),
+    [McpServerTool(Name = "redis_execute"),
      Description(
         "Run a raw Redis command. Pass the verb in `command` and its arguments in `args` (one element per arg — don't pre-quote). " +
         "Read-side commands are always permitted. Write commands require Redis:ReadOnly=false. " +
@@ -134,7 +134,7 @@ public sealed class ExecuteTool
         }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "ft_list"),
+    [McpServerTool(Name = "redis_ft_list"),
      Description("Convenience: FT._LIST — every RediSearch index name on the server. Returns empty array if RediSearch isn't loaded.")]
     public static async Task<string> FtList(
         RedisRegistry reg,
@@ -152,7 +152,7 @@ public sealed class ExecuteTool
         }
     }
 
-    [McpServerTool(Name = "ft_info"),
+    [McpServerTool(Name = "redis_ft_info"),
      Description("Convenience: FT.INFO <index> — fields, docs, stats, attributes for a RediSearch index.")]
     public static async Task<string> FtInfo(
         RedisRegistry reg,
@@ -166,7 +166,7 @@ public sealed class ExecuteTool
         return JsonSerializer.Serialize(new { alias, index, info = dict }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "ft_search"),
+    [McpServerTool(Name = "redis_ft_search"),
      Description("Convenience: FT.SEARCH <index> <query> [LIMIT offset count] — full-text query against a RediSearch index. Returns total + matched docs.")]
     public static async Task<string> FtSearch(
         RedisRegistry reg,

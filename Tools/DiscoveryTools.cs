@@ -9,7 +9,7 @@ namespace RedisMCPSharp.Tools;
 [McpServerToolType]
 public sealed class DiscoveryTools
 {
-    [McpServerTool(Name = "list_servers"),
+    [McpServerTool(Name = "redis_list_servers"),
      Description("**CALL FIRST** when you don't already know the aliases. Returns every configured Redis connection's alias + description + the default alias picked when a tool omits `alias`. Each alias is the handle every other tool accepts.")]
     public static string ListServers(RedisRegistry reg) =>
         JsonSerializer.Serialize(new
@@ -24,7 +24,7 @@ public sealed class DiscoveryTools
             }),
         }, JsonOpts.Default);
 
-    [McpServerTool(Name = "test_connection"),
+    [McpServerTool(Name = "redis_test_connection"),
      Description("PING the alias and return latency in ms. Fast first move when debugging credentials, network, or auth.")]
     public static async Task<string> TestConnection(
         RedisRegistry reg,
@@ -46,7 +46,7 @@ public sealed class DiscoveryTools
         }
     }
 
-    [McpServerTool(Name = "server_info"),
+    [McpServerTool(Name = "redis_server_info"),
      Description("Run INFO and return a structured view. Optional section name (server, clients, memory, persistence, stats, replication, cpu, commandstats, latencystats, cluster, keyspace, errorstats). Omit `section` for everything.")]
     public static async Task<string> ServerInfo(
         RedisRegistry reg,
@@ -71,7 +71,7 @@ public sealed class DiscoveryTools
         }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "version_info"),
+    [McpServerTool(Name = "redis_version_info"),
      Description("Return the detected Redis version + cluster shape + per-feature capability flags (e.g. hash-field-ttl on 7.4+). Useful before reaching for a version-sensitive command.")]
     public static async Task<string> VersionInfo(
         RedisRegistry reg,
@@ -93,7 +93,7 @@ public sealed class DiscoveryTools
         }, JsonOpts.Default);
     }
 
-    [McpServerTool(Name = "dbsize"),
+    [McpServerTool(Name = "redis_dbsize"),
      Description("DBSIZE — number of keys in the currently selected database (or every node, summed, on cluster).")]
     public static async Task<string> Dbsize(
         RedisRegistry reg,
