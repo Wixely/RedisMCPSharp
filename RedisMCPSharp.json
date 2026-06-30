@@ -1,0 +1,50 @@
+{
+  "Server": {
+    "Host": "localhost",
+    "Port": 5713,
+    "Path": "/mcp",
+    "WindowsServiceName": "RedisMCPSharp",
+    "Password": ""
+  },
+  "Redis": {
+    "ReadOnly": true,
+    "AllowDangerous": false,
+    "CommandTimeoutMs": 5000,
+    "MaxItems": 1000,
+    "MaxValueChars": 8000,
+    "DefaultScanPageSize": 100,
+    "DefaultAlias": "",
+    "Servers": [
+      {
+        "Alias": "local",
+        "ConnectionString": "localhost:6379",
+        "Database": 0,
+        "VersionOverride": "",
+        "Description": "Local Redis (replace with your own endpoints)."
+      }
+    ]
+  },
+  "Serilog": {
+    "MinimumLevel": {
+      "Default": "Information",
+      "Override": {
+        "Microsoft": "Warning",
+        "Microsoft.Hosting.Lifetime": "Information",
+        "Microsoft.AspNetCore": "Warning"
+      }
+    },
+    "Enrich": [ "FromLogContext", "WithMachineName", "WithProcessId", "WithThreadId" ],
+    "WriteTo": [
+      { "Name": "Console" },
+      {
+        "Name": "File",
+        "Args": {
+          "path": "logs/redismcp-.log",
+          "rollingInterval": "Day",
+          "retainedFileCountLimit": 7,
+          "shared": true
+        }
+      }
+    ]
+  }
+}
