@@ -4,12 +4,12 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0-noble AS build
 WORKDIR /src
 
 COPY NuGet.config global.json Directory.Build.props Directory.Packages.props ./
-COPY PaperlessNgxMCPSharp.csproj ./
+COPY RedisMCPSharp.csproj ./
 ARG TARGETARCH
 RUN arch="${TARGETARCH:-amd64}"; \
     if [ "$arch" = "amd64" ]; then arch="x64"; fi; \
     rid="linux-$arch"; \
-    dotnet restore PaperlessNgxMCPSharp.csproj \
+    dotnet restore RedisMCPSharp.csproj \
     -r "$rid" \
     -p:PublishSingleFile=true \
     -p:SelfContained=false \
@@ -19,7 +19,7 @@ COPY . .
 RUN arch="${TARGETARCH:-amd64}"; \
     if [ "$arch" = "amd64" ]; then arch="x64"; fi; \
     rid="linux-$arch"; \
-    dotnet publish PaperlessNgxMCPSharp.csproj \
+    dotnet publish RedisMCPSharp.csproj \
     -c Release \
     --no-restore \
     -r "$rid" \
@@ -40,18 +40,18 @@ WORKDIR /app
 ENV DOTNET_ENVIRONMENT=Production \
     ASPNETCORE_ENVIRONMENT=Production \
     DOTNET_RUNNING_IN_CONTAINER=true \
-    PAPERLESSMCP_Server__Host=0.0.0.0 \
-    PAPERLESSMCP_Server__Port=5708 \
-    PAPERLESSMCP_Server__Path=/mcp \
-    PAPERLESSMCP_Server__Password= \
-    PAPERLESSMCP_Paperless__ReadOnly=true \
-    PAPERLESSMCP_Paperless__AllowDelete=false
+    REDISMCP_Server__Host=0.0.0.0 \
+    REDISMCP_Server__Port=5713 \
+    REDISMCP_Server__Path=/mcp \
+    REDISMCP_Server__Password= \
+    REDISMCP_Redis__ReadOnly=true \
+    REDISMCP_Redis__AllowDangerous=false
 
 RUN mkdir -p /app/logs && chown -R $APP_UID:0 /app
 COPY --from=build --chown=$APP_UID:0 /app/publish ./
 
 USER $APP_UID
-EXPOSE 5708
+EXPOSE 5713
 VOLUME ["/app/logs"]
 
-ENTRYPOINT ["./PaperlessNgxMCPSharp"]
+ENTRYPOINT ["./RedisMCPSharp"]
