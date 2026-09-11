@@ -21,8 +21,8 @@ public sealed class StringTools
         var v = await inst.Db().StringGetAsync(key).ConfigureAwait(false);
         if (v.IsNull) return JsonSerializer.Serialize(new { alias, key, exists = false }, JsonOpts.Default);
         var text = (string?)v;
-        var truncated = text is not null && text.Length > reg.Options.MaxValueChars;
-        if (truncated) text = text![..reg.Options.MaxValueChars] + $"…(+{text.Length - reg.Options.MaxValueChars} chars)";
+        var truncated = text is not null && text.Length > reg.Options.MaxChars;
+        if (truncated) text = text![..reg.Options.MaxChars] + $"…(+{text.Length - reg.Options.MaxChars} chars)";
         return JsonSerializer.Serialize(new { alias, key, exists = true, value = text, truncated, lengthBytes = ((byte[]?)v)?.Length }, JsonOpts.Default);
     }
 
@@ -38,8 +38,8 @@ public sealed class StringTools
         var rows = keys.Zip(values, (k, v) =>
         {
             var s = (string?)v;
-            var trunc = s is not null && s.Length > reg.Options.MaxValueChars;
-            if (trunc) s = s![..reg.Options.MaxValueChars] + $"…(+{s.Length - reg.Options.MaxValueChars} chars)";
+            var trunc = s is not null && s.Length > reg.Options.MaxChars;
+            if (trunc) s = s![..reg.Options.MaxChars] + $"…(+{s.Length - reg.Options.MaxChars} chars)";
             return new { key = k, value = s, exists = !v.IsNull, truncated = trunc };
         });
         return JsonSerializer.Serialize(new { alias, count = keys.Length, items = rows }, JsonOpts.Default);

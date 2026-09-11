@@ -17,7 +17,7 @@ line conventions.
 - **Safe by default.** `Redis:ReadOnly` is `true` out of the box. Write tools (`redis_set`,
   `redis_del`, `redis_hset`, …) refuse until you flip it. Destructive admin ops (`FLUSHDB`,
   `CONFIG SET`, `DEBUG`, `FAILOVER`, raw `redis_execute` against an unknown verb) are
-  double-gated by `Redis:AllowDangerous`.
+  double-gated by `Redis:AllowDestructive`.
 
 Default port: **5713**. MCP endpoint: `http://localhost:5713/mcp`.
 
@@ -57,7 +57,7 @@ docker run --rm -p 5713:5713 \
 ```
 
 The image supports `linux/amd64` and `linux/arm64`. Read-only mode is on by default; set
-`REDISMCP_Redis__ReadOnly=false` (and `REDISMCP_Redis__AllowDangerous=true` for FLUSH /
+`REDISMCP_Redis__ReadOnly=false` (and `REDISMCP_Redis__AllowDestructive=true` for FLUSH /
 CONFIG SET / DEBUG / FAILOVER) only when you want write or admin tools. Use the
 `Redis__Servers__N__*` indexing pattern (where `N` is `0`, `1`, …) to declare multiple
 endpoints without a JSON file.
@@ -177,11 +177,15 @@ Set `Server.Password` to require an `X-MCP-Password` (or `Authorization: Bearer`
 | Key | Default | What it gates |
 |---|---|---|
 | `Redis:ReadOnly` | `true` | Every mutating tool. Flip to `false` to allow writes. |
-| `Redis:AllowDangerous` | `false` | `FLUSHDB`/`FLUSHALL`/`SHUTDOWN`/`DEBUG`/`FAILOVER`/`CONFIG SET`/`SCRIPT FLUSH`/`FUNCTION FLUSH` and raw `redis_execute` against unwrapped admin verbs. |
+| `Redis:AllowDestructive` | `false` | `FLUSHDB`/`FLUSHALL`/`SHUTDOWN`/`DEBUG`/`FAILOVER`/`CONFIG SET`/`SCRIPT FLUSH`/`FUNCTION FLUSH` and raw `redis_execute` against unwrapped admin verbs. |
 | `Redis:CommandTimeoutMs` | `5000` | Per-command sync/async timeout passed to StackExchange.Redis. |
 | `Redis:MaxItems` | `1000` | Cap on keys / fields / members returned in one tool call. |
-| `Redis:MaxValueChars` | `8000` | Cap on string-value chars before truncation. |
+| `Redis:MaxChars` | `8000` | Cap on string-value chars before truncation. |
 | `Redis:DefaultScanPageSize` | `100` | Hint for `SCAN COUNT`. Bigger = fewer round-trips, larger payloads. |
+
+Superseded keys, still honoured with a startup warning so an existing config keeps working:
+`Redis:AllowDangerous` (now `Redis:AllowDestructive`) and `Redis:MaxValueChars` (now
+`Redis:MaxChars`). Move your settings across; the old keys will be removed in a later release.
 
 ## Tool surface
 
@@ -230,7 +234,7 @@ tool accepts an optional `alias` parameter — omit it to use the default alias.
 
 ### Raw / extensions
 - `redis_execute` — run any Redis verb with arguments. Safe-listed read commands always run; writes
-  need `ReadOnly=false`, destructive admin verbs need `AllowDangerous=true`.
+  need `ReadOnly=false`, destructive admin verbs need `AllowDestructive=true`.
 - `redis_ft_list`, `redis_ft_info`, `redis_ft_search` — convenience wrappers around RediSearch `FT.*`.
 
 Use `redis_execute` directly for RedisJSON (`JSON.GET`, `JSON.SET`), RedisTimeSeries (`TS.*`),

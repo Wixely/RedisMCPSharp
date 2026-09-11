@@ -192,7 +192,7 @@ public sealed class KeyTools
                 var ttl = await db.KeyTimeToLiveAsync(k).ConfigureAwait(false);
                 object? preview = t switch
                 {
-                    RedisType.String => Trunc((string?)await db.StringGetAsync(k).ConfigureAwait(false), reg.Options.MaxValueChars),
+                    RedisType.String => Trunc((string?)await db.StringGetAsync(k).ConfigureAwait(false), reg.Options.MaxChars),
                     RedisType.List   => (await db.ListRangeAsync(k, 0, 4).ConfigureAwait(false)).Select(v => Trunc((string?)v, 200)),
                     RedisType.Hash   => (await db.HashGetAllAsync(k).ConfigureAwait(false)).Take(5).ToDictionary(e => e.Name.ToString(), e => Trunc((string?)e.Value, 200)),
                     RedisType.Set    => (await db.SetMembersAsync(k).ConfigureAwait(false)).Take(5).Select(v => Trunc((string?)v, 200)),

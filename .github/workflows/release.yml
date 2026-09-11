@@ -1,0 +1,19 @@
+name: Build Release Packages
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    # Shared pipeline: replaces the 6.6 KB workflow that was byte-identical across 18 servers.
+    uses: Wixely/DnaX/.github/workflows/mcpsharp-server.yml@main
+    with:
+      project_name: RedisMCPSharp
+      trim_policy: Analyzed

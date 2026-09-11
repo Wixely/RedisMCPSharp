@@ -1,3 +1,4 @@
+using DnaX.MCPFab;
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -22,37 +23,41 @@ public sealed class RedisRegistry : IAsyncDisposable
 {
     private readonly RedisOptions _options;
     private readonly ILogger<RedisRegistry> _log;
+    private readonly McpFabTargetRegistry<RedisServerEntry> _registry;
     private readonly Dictionary<string, RedisServerEntry> _byAlias = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, Lazy<Task<RedisInstance>>> _instances = new(StringComparer.OrdinalIgnoreCase);
-    private readonly string? _defaultAlias;
 
     public RedisRegistry(IOptions<RedisOptions> options, ILogger<RedisRegistry> log)
     {
         _options = options.Value;
         _log = log;
 
-        int idx = 1;
-        foreach (var entry in _options.Servers)
+        ConfigurationProblems = _options.ApplySupersededKeys();
+
+        // Alias generation, collision and format checks, and default-alias resolution are the
+        // shared MCPFab registry rather than a per-server reimplementation.
+        _registry = McpFabTargetRegistry<RedisServerEntry>.Create(
+            _options.Servers,
+            _options.DefaultAlias,
+            aliasPrefix: "redis");
+
+        foreach (RedisServerEntry entry in _registry.EnabledEntries)
         {
-            var alias = string.IsNullOrWhiteSpace(entry.Alias) ? $"redis-{idx}" : entry.Alias;
-            while (_byAlias.ContainsKey(alias)) alias = $"redis-{++idx}";
-            entry.Alias = alias;
-            _byAlias[alias] = entry;
-            idx++;
+            _byAlias[entry.Alias] = entry;
         }
 
-        var preferred = _options.DefaultAlias;
-        _defaultAlias = !string.IsNullOrWhiteSpace(preferred) && _byAlias.ContainsKey(preferred)
-            ? preferred
-            : _byAlias.Keys.FirstOrDefault();
+        ConfigurationProblems = [.. ConfigurationProblems, .. _registry.Problems];
     }
 
     public RedisOptions Options => _options;
     public IReadOnlyDictionary<string, RedisServerEntry> Servers => _byAlias;
-    public string? DefaultAlias => _defaultAlias;
+    public string? DefaultAlias => _registry.Default?.Alias;
+
+    /// <summary>Superseded-key notices and registry problems, surfaced in the startup banner.</summary>
+    public IReadOnlyList<string> ConfigurationProblems { get; }
 
     public bool IsReadOnly => _options.ReadOnly;
-    public bool AllowDangerous => _options.AllowDangerous;
+    public bool AllowDestructive => _options.AllowDestructive;
 
     public void RequireWritable(string operation)
     {
@@ -63,21 +68,15 @@ public sealed class RedisRegistry : IAsyncDisposable
 
     public void RequireDangerous(string operation)
     {
-        if (!_options.AllowDangerous)
+        if (!_options.AllowDestructive)
             throw new InvalidOperationException(
-                $"Operation '{operation}' is dangerous (flushes / pattern-deletes / arbitrary commands) and disabled. Set Redis:AllowDangerous=true to permit it.");
+                $"Operation '{operation}' is destructive (flushes / pattern-deletes / arbitrary commands) and disabled. Set Redis:AllowDestructive=true to permit it.");
     }
 
     public RedisServerEntry ResolveAlias(string? alias)
     {
         if (_byAlias.Count == 0) throw new InvalidOperationException("No Redis servers configured.");
-        if (!string.IsNullOrWhiteSpace(alias))
-        {
-            if (_byAlias.TryGetValue(alias, out var direct)) return direct;
-            throw new InvalidOperationException(
-                $"Unknown Redis alias '{alias}'. Available: {string.Join(", ", _byAlias.Keys)}.");
-        }
-        return _byAlias[_defaultAlias!];
+        return _registry.Resolve(alias);
     }
 
     /// <summary>

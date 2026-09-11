@@ -164,7 +164,7 @@ public sealed class DiagnosticTools
     }
 
     [McpServerTool(Name = "redis_config_set"),
-     Description("CONFIG SET — change a runtime parameter (e.g. maxmemory, timeout). Refused when Redis:ReadOnly=true and double-gated by Redis:AllowDangerous (changing config is administrative).")]
+     Description("CONFIG SET — change a runtime parameter (e.g. maxmemory, timeout). Refused when Redis:ReadOnly=true and double-gated by Redis:AllowDestructive (changing config is administrative).")]
     public static async Task<string> ConfigSet(
         RedisRegistry reg,
         [Description("Parameter name.")] string parameter,
@@ -312,7 +312,7 @@ public sealed class DiagnosticTools
     }
 
     [McpServerTool(Name = "redis_debug_object"),
-     Description("DEBUG OBJECT — low-level encoding/refcount/serialised-length for one key. Doubly-gated by Redis:AllowDangerous (DEBUG group is admin-only).")]
+     Description("DEBUG OBJECT — low-level encoding/refcount/serialised-length for one key. Doubly-gated by Redis:AllowDestructive (DEBUG group is admin-only).")]
     public static async Task<string> DebugObject(
         RedisRegistry reg,
         [Description("Key.")] string key,

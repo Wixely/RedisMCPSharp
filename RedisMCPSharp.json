@@ -8,9 +8,13 @@
   },
   "Redis": {
     "ReadOnly": true,
+    "AllowDestructive": false,
+    "// AllowDangerous": "Superseded by AllowDestructive. Still honoured; remove once migrated.",
     "AllowDangerous": false,
     "CommandTimeoutMs": 5000,
     "MaxItems": 1000,
+    "MaxChars": 8000,
+    "// MaxValueChars": "Superseded by MaxChars. Still honoured; remove once migrated.",
     "MaxValueChars": 8000,
     "DefaultScanPageSize": 100,
     "DefaultAlias": "",
