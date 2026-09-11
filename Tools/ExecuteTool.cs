@@ -11,7 +11,7 @@ namespace RedisMCPSharp.Tools;
 /// PFCOUNT, COPY, CLIENT NO-EVICT, etc.) the agent uses this. Doubly-gated:
 ///   - read mode: only commands on the safe-list run; everything else needs Redis:ReadOnly=false.
 ///   - dangerous mode: FLUSHDB / FLUSHALL / DEBUG / SHUTDOWN / SCRIPT FLUSH / FUNCTION FLUSH /
-///     CONFIG REWRITE / CLUSTER RESET / FAILOVER need Redis:AllowDangerous=true.
+///     CONFIG REWRITE / CLUSTER RESET / FAILOVER need Redis:AllowDestructive=true.
 /// </summary>
 [McpServerToolType]
 public sealed class ExecuteTool
@@ -73,7 +73,7 @@ public sealed class ExecuteTool
     };
 
     /// <summary>
-    /// Commands that, even in write mode, need explicit Redis:AllowDangerous=true. These either
+    /// Commands that, even in write mode, need explicit Redis:AllowDestructive=true. These either
     /// wipe data or change global server state in ways that are hard to undo.
     /// </summary>
     private static readonly HashSet<string> DangerousCommands = new(StringComparer.OrdinalIgnoreCase)
@@ -98,7 +98,7 @@ public sealed class ExecuteTool
      Description(
         "Run a raw Redis command. Pass the verb in `command` and its arguments in `args` (one element per arg — don't pre-quote). " +
         "Read-side commands are always permitted. Write commands require Redis:ReadOnly=false. " +
-        "Destructive admin commands (FLUSHDB, FLUSHALL, SHUTDOWN, DEBUG, FAILOVER, CONFIG REWRITE, …) additionally require Redis:AllowDangerous=true. " +
+        "Destructive admin commands (FLUSHDB, FLUSHALL, SHUTDOWN, DEBUG, FAILOVER, CONFIG REWRITE, …) additionally require Redis:AllowDestructive=true. " +
         "Use this for RediSearch (FT.*), RedisJSON (JSON.*), RedisTimeSeries (TS.*), RedisBloom (BF.*/CF.*/CMS.*/TOPK.*/TDIGEST.*) and any other command not wrapped explicitly.")]
     public static async Task<string> Execute(
         RedisRegistry reg,
