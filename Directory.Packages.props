@@ -3,8 +3,8 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="DnaX.MCPFab" Version="10.0.0-alpha.3" />
-    <PackageVersion Include="DnaX.MCPFab.Build" Version="10.0.0-alpha.3" />
+    <PackageVersion Include="DnaX.MCPFab" Version="10.0.0-alpha.4" />
+    <PackageVersion Include="DnaX.MCPFab.Build" Version="10.0.0-alpha.4" />
     <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.0.0" />
     <PackageVersion Include="StackExchange.Redis" Version="2.13.17" />
   </ItemGroup>
