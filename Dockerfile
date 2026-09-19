@@ -21,9 +21,20 @@ WORKDIR /src
 COPY NuGet.config global.json Directory.Build.props Directory.Packages.props ./
 COPY ${PROJECT} ./
 ARG TARGETARCH
-RUN arch="${TARGETARCH:-amd64}"; \
+# DnaX.MCPFab comes from GitHub Packages, which refuses anonymous downloads. Pass a token with
+# read:packages as a BuildKit secret, so it is never recorded in the image history:
+#   docker build --secret id=nuget_github_token,env=GITHUB_TOKEN .
+RUN --mount=type=secret,id=nuget_github_token \
+    arch="${TARGETARCH:-amd64}"; \
     if [ "$arch" = "amd64" ]; then arch="x64"; fi; \
     rid="linux-$arch"; \
+    if [ -s /run/secrets/nuget_github_token ]; then \
+    dotnet nuget update source GitHub-Wixely-Packages \
+    --username token \
+    --password "$(cat /run/secrets/nuget_github_token)" \
+    --store-password-in-clear-text \
+    --configfile NuGet.config; \
+    fi; \
     dotnet restore "${PROJECT}" \
     -r "$rid" \
     -p:PublishSingleFile=true \
