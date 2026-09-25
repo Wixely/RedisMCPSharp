@@ -1,3 +1,4 @@
+using DnaX.MCPFab;
 using System.ComponentModel;
 using System.Text.Json;
 using ModelContextProtocol.Server;
@@ -144,11 +145,11 @@ public sealed class ExecuteTool
         try
         {
             var raw = (RedisResult[]?)await inst.Db().ExecuteAsync("FT._LIST").ConfigureAwait(false) ?? Array.Empty<RedisResult>();
-            return JsonSerializer.Serialize(new { alias, indexes = raw.Select(r => r.ToString()).ToArray() }, JsonOpts.Default);
+            return McpJson.Object().Set("alias", alias).Set("indexes", McpJson.Array(raw.Select(r => r.ToString()).ToArray(), item => McpJson.Scalar(item))).ToJsonString();
         }
         catch (RedisServerException ex) when (ex.Message.Contains("unknown command", StringComparison.OrdinalIgnoreCase))
         {
-            return JsonSerializer.Serialize(new { alias, available = false, note = "RediSearch module not loaded." }, JsonOpts.Default);
+            return McpJson.Object().Set("alias", alias).Set("available", false).Set("note", "RediSearch module not loaded.").ToJsonString();
         }
     }
 
