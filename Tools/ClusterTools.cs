@@ -1,3 +1,4 @@
+using DnaX.MCPFab;
 using System.ComponentModel;
 using System.Text.Json;
 using ModelContextProtocol.Server;
@@ -23,7 +24,7 @@ public sealed class ClusterTools
         var server = inst.FirstServer();
         var raw = (string?)await inst.Db().ExecuteAsync("CLUSTER", "INFO").ConfigureAwait(false) ?? "";
         var dict = ParseKvLines(raw);
-        return JsonSerializer.Serialize(new { alias, isCluster = inst.IsCluster, info = dict }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("isCluster", inst.IsCluster).Set("info", McpJson.Map(dict, entry => McpJson.Scalar(entry))).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_cluster_nodes"),
@@ -51,7 +52,12 @@ public sealed class ClusterTools
                 slots = parts.Length > 8 ? parts.Skip(8).ToArray() : Array.Empty<string>(),
             };
         });
-        return JsonSerializer.Serialize(new { alias, nodes }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("nodes", McpJson.Array(raw.Split('\n', StringSplitOptions.RemoveEmptyEntries), line =>
+        {
+            // <id> <ip:port@cport[,hostname]> <flags> <master> <ping> <pong> <epoch> <linkstate> [slot range ...]
+            var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return McpJson.Object().Set("id", parts.ElementAtOrDefault(0)).Set("endpoint", parts.ElementAtOrDefault(1)).Set("flags", parts.ElementAtOrDefault(2)).Set("master", parts.ElementAtOrDefault(3)).Set("pingSent", parts.ElementAtOrDefault(4)).Set("pongRecv", parts.ElementAtOrDefault(5)).Set("epoch", parts.ElementAtOrDefault(6)).Set("linkState", parts.ElementAtOrDefault(7)).Set("slots", McpJson.Array(parts.Length > 8 ? parts.Skip(8).ToArray() : Array.Empty<string>(), item => McpJson.Scalar(item)));
+        })).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_cluster_slots"),
@@ -65,7 +71,7 @@ public sealed class ClusterTools
         // Both are nested arrays; we just stringify the response — the structure is engine-specific.
         var cmd = inst.Version >= new Version(7, 0) ? "SHARDS" : "SLOTS";
         var raw = await inst.Db().ExecuteAsync("CLUSTER", cmd).ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, command = $"CLUSTER {cmd}", raw = raw.ToString() }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("command", $"CLUSTER {cmd}").Set("raw", raw.ToString()).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_cluster_keyslot"),
@@ -77,7 +83,7 @@ public sealed class ClusterTools
     {
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var slot = (long?)await inst.Db().ExecuteAsync("CLUSTER", "KEYSLOT", key).ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, key, slot }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("key", key).Set("slot", slot).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_cluster_countkeysinslot"),
@@ -89,7 +95,7 @@ public sealed class ClusterTools
     {
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var n = (long?)await inst.Db().ExecuteAsync("CLUSTER", "COUNTKEYSINSLOT", slot).ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, slot, keys = n }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("slot", slot).Set("keys", n).ToJsonString();
     }
 
     private static Dictionary<string, string> ParseKvLines(string raw)
