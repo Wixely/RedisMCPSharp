@@ -1,5 +1,7 @@
+using DnaX.MCPFab;
 using System.ComponentModel;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ModelContextProtocol.Server;
 using RedisMCPSharp.Services;
 using StackExchange.Redis;
@@ -12,17 +14,7 @@ public sealed class DiscoveryTools
     [McpServerTool(Name = "redis_list_servers"),
      Description("**CALL FIRST** when you don't already know the aliases. Returns every configured Redis connection's alias + description + the default alias picked when a tool omits `alias`. Each alias is the handle every other tool accepts.")]
     public static string ListServers(RedisRegistry reg) =>
-        JsonSerializer.Serialize(new
-        {
-            defaultAlias = reg.DefaultAlias,
-            servers = reg.Servers.Values.Select(s => new
-            {
-                alias = s.Alias,
-                description = s.Description,
-                database = s.Database,
-                versionOverride = string.IsNullOrEmpty(s.VersionOverride) ? null : s.VersionOverride,
-            }),
-        }, JsonOpts.Default);
+        McpJson.Object().Set("defaultAlias", reg.DefaultAlias).Set("servers", McpJson.Array(reg.Servers.Values, s => McpJson.Object().Set("alias", s.Alias).Set("description", s.Description).Set("database", s.Database).Set("versionOverride", string.IsNullOrEmpty(s.VersionOverride) ? null : s.VersionOverride))).ToJsonString();
 
     [McpServerTool(Name = "redis_test_connection"),
      Description("PING the alias and return latency in ms. Fast first move when debugging credentials, network, or auth.")]
@@ -37,12 +29,12 @@ public sealed class DiscoveryTools
             var inst = await reg.GetAsync(alias).ConfigureAwait(false);
             var latency = await inst.Db().PingAsync().ConfigureAwait(false);
             sw.Stop();
-            return JsonSerializer.Serialize(new { alias, ok = true, pingMs = latency.TotalMilliseconds, totalMs = sw.ElapsedMilliseconds, version = inst.VersionRaw, cluster = inst.IsCluster }, JsonOpts.Default);
+            return McpJson.Object().Set("alias", alias).Set("ok", true).Set("pingMs", latency.TotalMilliseconds).Set("totalMs", sw.ElapsedMilliseconds).Set("version", inst.VersionRaw).Set("cluster", inst.IsCluster).ToJsonString();
         }
         catch (Exception ex)
         {
             sw.Stop();
-            return JsonSerializer.Serialize(new { alias, ok = false, totalMs = sw.ElapsedMilliseconds, error = ex.Message }, JsonOpts.Default);
+            return McpJson.Object().Set("alias", alias).Set("ok", false).Set("totalMs", sw.ElapsedMilliseconds).Set("error", ex.Message).ToJsonString();
         }
     }
 
@@ -59,16 +51,7 @@ public sealed class DiscoveryTools
         var groups = string.IsNullOrWhiteSpace(section)
             ? await server.InfoAsync().ConfigureAwait(false)
             : await server.InfoAsync(section).ConfigureAwait(false);
-        return JsonSerializer.Serialize(new
-        {
-            alias,
-            section,
-            sections = groups.Select(g => new
-            {
-                name = g.Key,
-                values = g.ToDictionary(kv => kv.Key, kv => kv.Value),
-            }),
-        }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("section", section).Set("sections", McpJson.Array(groups, g => McpJson.Object().Set("name", g.Key).Set("values", McpJson.Map(g.ToDictionary(kv => kv.Key, kv => kv.Value), entry => McpJson.Scalar(entry))))).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_version_info"),
@@ -78,19 +61,7 @@ public sealed class DiscoveryTools
         [Description("Alias. Omit for default.")] string? alias = null)
     {
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
-        return JsonSerializer.Serialize(new
-        {
-            alias = inst.Entry.Alias,
-            version = inst.VersionRaw,
-            versionMajorMinor = $"{inst.Version.Major}.{inst.Version.Minor}",
-            cluster = inst.IsCluster,
-            features = new
-            {
-                hashFieldTtl = inst.HasFeature("hash-field-ttl"),
-                functionList = inst.HasFeature("function-list"),
-                objectFreq = inst.HasFeature("object-freq"),
-            },
-        }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", inst.Entry.Alias).Set("version", inst.VersionRaw).Set("versionMajorMinor", $"{inst.Version.Major}.{inst.Version.Minor}").Set("cluster", inst.IsCluster).Set("features", McpJson.Object().Set("hashFieldTtl", inst.HasFeature("hash-field-ttl")).Set("functionList", inst.HasFeature("function-list")).Set("objectFreq", inst.HasFeature("object-freq"))).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_dbsize"),
@@ -103,7 +74,7 @@ public sealed class DiscoveryTools
         if (inst.IsCluster)
         {
             long total = 0;
-            var perNode = new List<object>();
+            JsonArray perNode = [];
             foreach (var ep in inst.Multiplexer.GetEndPoints())
             {
                 try
@@ -112,17 +83,17 @@ public sealed class DiscoveryTools
                     if (s.IsConnected && !s.IsReplica)
                     {
                         var c = await s.DatabaseSizeAsync().ConfigureAwait(false);
-                        total += c; perNode.Add(new { endpoint = ep.ToString(), keys = c });
+                        total += c; perNode.AddNode(McpJson.Object().Set("endpoint", ep.ToString()).Set("keys", c));
                     }
                 }
-                catch (Exception ex) { perNode.Add(new { endpoint = ep.ToString(), error = ex.Message }); }
+                catch (Exception ex) { perNode.AddNode(McpJson.Object().Set("endpoint", ep.ToString()).Set("error", ex.Message)); }
             }
-            return JsonSerializer.Serialize(new { alias, cluster = true, total, perNode }, JsonOpts.Default);
+            return McpJson.Object().Set("alias", alias).Set("cluster", true).Set("total", total).Set("perNode", perNode).ToJsonString();
         }
         else
         {
             var count = await inst.FirstServer().DatabaseSizeAsync(inst.Entry.Database).ConfigureAwait(false);
-            return JsonSerializer.Serialize(new { alias, database = inst.Entry.Database, keys = count }, JsonOpts.Default);
+            return McpJson.Object().Set("alias", alias).Set("database", inst.Entry.Database).Set("keys", count).ToJsonString();
         }
     }
 }

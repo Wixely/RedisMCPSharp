@@ -1,5 +1,7 @@
+using DnaX.MCPFab;
 using System.ComponentModel;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ModelContextProtocol.Server;
 using RedisMCPSharp.Services;
 using StackExchange.Redis;
@@ -18,7 +20,7 @@ public sealed class KeyTools
     {
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var count = await inst.Db().KeyExistsAsync(keys.Select(k => (RedisKey)k).ToArray()).ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, queried = keys.Length, exists = count }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("queried", keys.Length).Set("exists", count).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_type"),
@@ -30,7 +32,7 @@ public sealed class KeyTools
     {
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var type = await inst.Db().KeyTypeAsync(key).ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, key, type = type.ToString().ToLowerInvariant() }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("key", key).Set("type", type.ToString().ToLowerInvariant()).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_ttl"),
@@ -42,7 +44,7 @@ public sealed class KeyTools
     {
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var t = await inst.Db().KeyTimeToLiveAsync(key).ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, key, ttlSeconds = t?.TotalSeconds, ttlMs = t?.TotalMilliseconds }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("key", key).Set("ttlSeconds", t?.TotalSeconds).Set("ttlMs", t?.TotalMilliseconds).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_expire"),
@@ -56,7 +58,7 @@ public sealed class KeyTools
         reg.RequireWritable("expire");
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var ok = await inst.Db().KeyExpireAsync(key, TimeSpan.FromSeconds(seconds)).ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, key, set = ok }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("key", key).Set("set", ok).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_persist"),
@@ -69,7 +71,7 @@ public sealed class KeyTools
         reg.RequireWritable("persist");
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var ok = await inst.Db().KeyPersistAsync(key).ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, key, persisted = ok }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("key", key).Set("persisted", ok).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_rename"),
@@ -84,7 +86,7 @@ public sealed class KeyTools
         reg.RequireWritable("rename");
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var ok = await inst.Db().KeyRenameAsync(from, to, when: overwrite ? When.Always : When.NotExists).ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, from, to, ok }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("from", from).Set("to", to).Set("ok", ok).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_del"),
@@ -97,7 +99,7 @@ public sealed class KeyTools
         reg.RequireWritable("del");
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var deleted = await inst.Db().KeyDeleteAsync(keys.Select(k => (RedisKey)k).ToArray()).ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, requested = keys.Length, deleted }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("requested", keys.Length).Set("deleted", deleted).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_object_encoding"),
@@ -109,7 +111,7 @@ public sealed class KeyTools
     {
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var enc = (string?)await inst.Db().ExecuteAsync("OBJECT", "ENCODING", key).ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, key, encoding = enc }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("key", key).Set("encoding", enc).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_object_idletime"),
@@ -121,7 +123,7 @@ public sealed class KeyTools
     {
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var v = (long?)await inst.Db().ExecuteAsync("OBJECT", "IDLETIME", key).ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, key, idleSeconds = v }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("key", key).Set("idleSeconds", v).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_scan"),
@@ -160,7 +162,7 @@ public sealed class KeyTools
             if (keys.Count >= cap) break;
         }
 
-        return JsonSerializer.Serialize(new { alias, pattern, type, returned = keys.Count, truncated = keys.Count == cap, keys }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("pattern", pattern).Set("type", type).Set("returned", keys.Count).Set("truncated", keys.Count == cap).Set("keys", McpJson.Array(keys, item => McpJson.Scalar(item))).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_scan_with_values"),
@@ -176,7 +178,7 @@ public sealed class KeyTools
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var cap = Math.Max(1, Math.Min(max, reg.Options.MaxItems));
         var db = inst.Db();
-        var results = new List<object>();
+        JsonArray results = [];
 
         var endpoints = inst.IsCluster
             ? inst.Multiplexer.GetEndPoints().Select(ep => inst.Multiplexer.GetServer(ep)).Where(s => s.IsConnected && !s.IsReplica)
@@ -190,22 +192,41 @@ public sealed class KeyTools
                 var t = await db.KeyTypeAsync(k).ConfigureAwait(false);
                 if (type is not null && !string.Equals(t.ToString(), type, StringComparison.OrdinalIgnoreCase)) continue;
                 var ttl = await db.KeyTimeToLiveAsync(k).ConfigureAwait(false);
-                object? preview = t switch
+                JsonNode? preview = t switch
                 {
-                    RedisType.String => Trunc((string?)await db.StringGetAsync(k).ConfigureAwait(false), reg.Options.MaxChars),
-                    RedisType.List   => (await db.ListRangeAsync(k, 0, 4).ConfigureAwait(false)).Select(v => Trunc((string?)v, 200)),
-                    RedisType.Hash   => (await db.HashGetAllAsync(k).ConfigureAwait(false)).Take(5).ToDictionary(e => e.Name.ToString(), e => Trunc((string?)e.Value, 200)),
-                    RedisType.Set    => (await db.SetMembersAsync(k).ConfigureAwait(false)).Take(5).Select(v => Trunc((string?)v, 200)),
-                    RedisType.SortedSet => (await db.SortedSetRangeByScoreWithScoresAsync(k, take: 5).ConfigureAwait(false)).Select(e => new { value = Trunc((string?)e.Element, 200), score = e.Score }),
+                    // JsonNode per arm rather than object: the preview really is polymorphic - the
+                    // shape follows the key's Redis type - and as object it needed reflection to
+                    // serialise, which a trimmed build cannot do.
+                    RedisType.String => JsonValue.Create(Trunc((string?)await db.StringGetAsync(k).ConfigureAwait(false), reg.Options.MaxChars)),
+                    RedisType.List => McpJson.Array(await db.ListRangeAsync(k, 0, 4).ConfigureAwait(false), v => McpJson.Scalar(Trunc((string?)v, 200))),
+                    RedisType.Hash => McpJson.Map(
+                        (await db.HashGetAllAsync(k).ConfigureAwait(false)).Take(5)
+                            .Select(e => new KeyValuePair<string, string?>(e.Name.ToString(), Trunc((string?)e.Value, 200))),
+                        v => McpJson.Scalar(v)),
+                    RedisType.Set => McpJson.Array((await db.SetMembersAsync(k).ConfigureAwait(false)).Take(5), v => McpJson.Scalar(Trunc((string?)v, 200))),
+                    RedisType.SortedSet => McpJson.Array(
+                        await db.SortedSetRangeByScoreWithScoresAsync(k, take: 5).ConfigureAwait(false),
+                        e => McpJson.Object().Set("value", Trunc((string?)e.Element, 200)).Set("score", e.Score)),
                     _ => null,
                 };
-                results.Add(new { key = k.ToString(), type = t.ToString().ToLowerInvariant(), ttlSeconds = ttl?.TotalSeconds, preview });
+                results.AddNode(McpJson.Object()
+                    .Set("key", k.ToString())
+                    .Set("type", t.ToString().ToLowerInvariant())
+                    .Set("ttlSeconds", ttl?.TotalSeconds)
+                    .Set("preview", preview));
                 if (results.Count >= cap) break;
             }
             if (results.Count >= cap) break;
         }
 
-        return JsonSerializer.Serialize(new { alias, pattern, type, returned = results.Count, truncated = results.Count == cap, items = results }, JsonOpts.Default);
+        return McpJson.Object()
+            .Set("alias", alias)
+            .Set("pattern", pattern)
+            .Set("type", type)
+            .Set("returned", results.Count)
+            .Set("truncated", results.Count == cap)
+            .Set("items", results)
+            .ToJsonString();
     }
 
     [McpServerTool(Name = "redis_search_keys"),

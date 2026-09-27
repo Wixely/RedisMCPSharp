@@ -1,5 +1,7 @@
+using DnaX.MCPFab;
 using System.ComponentModel;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ModelContextProtocol.Server;
 using RedisMCPSharp.Services;
 using StackExchange.Redis;
@@ -36,7 +38,12 @@ public sealed class DiagnosticTools
                 clientName = fields.ElementAtOrDefault(5)?.ToString(),
             };
         });
-        return JsonSerializer.Serialize(new { alias, count = raw.Length, entries = rows }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("count", raw.Length).Set("entries", McpJson.Array(raw, entry =>
+        {
+            var fields = (RedisResult[]?)entry ?? Array.Empty<RedisResult>();
+            return McpJson.Object().Set("id", fields.ElementAtOrDefault(0)?.ToString()).Set("unixSeconds", AsLong(fields, 1)).Set("durationMicros", AsLong(fields, 2)).Set("command", McpJson.Array(((RedisResult[]?)fields.ElementAtOrDefault(3) ?? Array.Empty<RedisResult>())
+                    .Select(p => p.ToString()).ToArray(), item => McpJson.Scalar(item))).Set("clientAddr", fields.ElementAtOrDefault(4)?.ToString()).Set("clientName", fields.ElementAtOrDefault(5)?.ToString());
+        })).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_slowlog_len"),
@@ -47,7 +54,7 @@ public sealed class DiagnosticTools
     {
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var len = (long?)await inst.Db().ExecuteAsync("SLOWLOG", "LEN").ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, length = len }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("length", len).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_slowlog_reset"),
@@ -59,7 +66,7 @@ public sealed class DiagnosticTools
         reg.RequireWritable("slowlog_reset");
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         await inst.Db().ExecuteAsync("SLOWLOG", "RESET").ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, reset = true }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("reset", true).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_memory_usage"),
@@ -72,7 +79,7 @@ public sealed class DiagnosticTools
     {
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var bytes = (long?)await inst.Db().ExecuteAsync("MEMORY", "USAGE", key, "SAMPLES", samples).ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, key, bytes }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("key", key).Set("bytes", bytes).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_memory_stats"),
@@ -83,14 +90,12 @@ public sealed class DiagnosticTools
     {
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var raw = (RedisResult[]?)await inst.Db().ExecuteAsync("MEMORY", "STATS").ConfigureAwait(false) ?? Array.Empty<RedisResult>();
-        var dict = new Dictionary<string, object?>(StringComparer.Ordinal);
+        JsonObject stats = McpJson.Object();
         for (int i = 0; i + 1 < raw.Length; i += 2)
         {
-            var k = raw[i].ToString();
-            var v = raw[i + 1];
-            dict[k] = FlattenResult(v);
+            stats[raw[i].ToString()] = FlattenResult(raw[i + 1]);
         }
-        return JsonSerializer.Serialize(new { alias, stats = dict }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("stats", stats).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_memory_doctor"),
@@ -101,7 +106,7 @@ public sealed class DiagnosticTools
     {
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var raw = (string?)await inst.Db().ExecuteAsync("MEMORY", "DOCTOR").ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, report = raw }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("report", raw).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_client_list"),
@@ -126,7 +131,7 @@ public sealed class DiagnosticTools
             }
             return dict;
         });
-        return JsonSerializer.Serialize(new { alias, type, clients = rows }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("type", type).Set("clients", McpJson.Array(rows, item => McpJson.Map(item, item1 => McpJson.Scalar(item1)))).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_client_kill"),
@@ -145,7 +150,7 @@ public sealed class DiagnosticTools
             ? new object[] { "ID", id! }
             : new object[] { "ADDR", addr! };
         var result = await inst.Db().ExecuteAsync("CLIENT", new object[] { "KILL" }.Concat(args).ToArray()).ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, id, addr, result = result.ToString() }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("id", id).Set("addr", addr).Set("result", result.ToString()).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_config_get"),
@@ -160,7 +165,7 @@ public sealed class DiagnosticTools
         var dict = new Dictionary<string, string>(StringComparer.Ordinal);
         for (int i = 0; i + 1 < raw.Length; i += 2)
             dict[raw[i].ToString()] = raw[i + 1].ToString();
-        return JsonSerializer.Serialize(new { alias, pattern, parameters = dict }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("pattern", pattern).Set("parameters", McpJson.Map(dict, entry => McpJson.Scalar(entry))).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_config_set"),
@@ -175,7 +180,7 @@ public sealed class DiagnosticTools
         reg.RequireDangerous("config_set");
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var result = await inst.Db().ExecuteAsync("CONFIG", "SET", parameter, value).ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, parameter, value, result = result.ToString() }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("parameter", parameter).Set("value", value).Set("result", result.ToString()).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_config_resetstat"),
@@ -187,7 +192,7 @@ public sealed class DiagnosticTools
         reg.RequireWritable("config_resetstat");
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         await inst.Db().ExecuteAsync("CONFIG", "RESETSTAT").ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, reset = true }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("reset", true).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_latency_history"),
@@ -208,7 +213,11 @@ public sealed class DiagnosticTools
                 latencyMs = AsLong(pair, 1),
             };
         });
-        return JsonSerializer.Serialize(new { alias, @event, samples = rows }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("event", @event).Set("samples", McpJson.Array(raw, r =>
+        {
+            var pair = (RedisResult[]?)r ?? Array.Empty<RedisResult>();
+            return McpJson.Object().Set("unixSeconds", AsLong(pair, 0)).Set("latencyMs", AsLong(pair, 1));
+        })).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_latency_latest"),
@@ -230,7 +239,11 @@ public sealed class DiagnosticTools
                 maxMs = AsLong(f, 3),
             };
         });
-        return JsonSerializer.Serialize(new { alias, events = rows }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("events", McpJson.Array(raw, entry =>
+        {
+            var f = (RedisResult[]?)entry ?? Array.Empty<RedisResult>();
+            return McpJson.Object().Set("event", f.ElementAtOrDefault(0)?.ToString()).Set("unixSeconds", AsLong(f, 1)).Set("latestMs", AsLong(f, 2)).Set("maxMs", AsLong(f, 3));
+        })).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_latency_reset"),
@@ -246,7 +259,7 @@ public sealed class DiagnosticTools
             ? new object[] { "RESET" }.Concat(events.Cast<object>()).ToArray()
             : new object[] { "RESET" };
         var cleared = (long?)await inst.Db().ExecuteAsync("LATENCY", args).ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, cleared }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("cleared", cleared).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_lastsave"),
@@ -257,7 +270,7 @@ public sealed class DiagnosticTools
     {
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var ts = await inst.FirstServer().LastSaveAsync().ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, lastSaveUtc = ts, lastSaveUnix = new DateTimeOffset(ts, TimeSpan.Zero).ToUnixTimeSeconds() }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("lastSaveUtc", McpJson.Scalar(ts)).Set("lastSaveUnix", new DateTimeOffset(ts, TimeSpan.Zero).ToUnixTimeSeconds()).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_command_count"),
@@ -268,7 +281,7 @@ public sealed class DiagnosticTools
     {
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var n = (long?)await inst.Db().ExecuteAsync("COMMAND", "COUNT").ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, commands = n }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("commands", n).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_module_list"),
@@ -287,7 +300,7 @@ public sealed class DiagnosticTools
             for (int i = 0; i + 1 < f.Length; i += 2) dict[f[i].ToString()] = f[i + 1].ToString();
             return dict;
         });
-        return JsonSerializer.Serialize(new { alias, modules = rows }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("modules", McpJson.Array(rows, item => McpJson.Map(item, item1 => McpJson.Scalar(item1)))).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_function_list"),
@@ -298,17 +311,17 @@ public sealed class DiagnosticTools
     {
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         if (!inst.HasFeature("function-list"))
-            return JsonSerializer.Serialize(new { alias, supported = false, note = "FUNCTION LIST requires Redis 7.0+." }, JsonOpts.Default);
+            return McpJson.Object().Set("alias", alias).Set("supported", false).Set("note", "FUNCTION LIST requires Redis 7.0+.").ToJsonString();
 
         var raw = (RedisResult[]?)await inst.Db().ExecuteAsync("FUNCTION", "LIST").ConfigureAwait(false) ?? Array.Empty<RedisResult>();
-        var libs = raw.Select(lib =>
+        JsonArray libs = McpJson.Array(raw, lib =>
         {
             var f = (RedisResult[]?)lib ?? Array.Empty<RedisResult>();
-            var dict = new Dictionary<string, object?>(StringComparer.Ordinal);
-            for (int i = 0; i + 1 < f.Length; i += 2) dict[f[i].ToString()] = FlattenResult(f[i + 1]);
-            return dict;
+            JsonObject library = McpJson.Object();
+            for (int i = 0; i + 1 < f.Length; i += 2) library[f[i].ToString()] = FlattenResult(f[i + 1]);
+            return library;
         });
-        return JsonSerializer.Serialize(new { alias, supported = true, libraries = libs }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("supported", true).Set("libraries", libs).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_debug_object"),
@@ -321,7 +334,7 @@ public sealed class DiagnosticTools
         reg.RequireDangerous("debug_object");
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var raw = (string?)await inst.Db().ExecuteAsync("DEBUG", "OBJECT", key).ConfigureAwait(false);
-        return JsonSerializer.Serialize(new { alias, key, info = raw }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("key", key).Set("info", raw).ToJsonString();
     }
 
     private static long? AsLong(RedisResult[] arr, int idx)
@@ -333,29 +346,38 @@ public sealed class DiagnosticTools
         catch { return long.TryParse(r.ToString(), out var v) ? v : (long?)null; }
     }
 
-    private static object? FlattenResult(RedisResult r)
+    /// <summary>
+    /// Converts a RESP reply into a JSON node.
+    /// </summary>
+    /// <remarks>
+    /// Returns JsonNode rather than object so the value needs no reflection to serialise. As object
+    /// it was the sole reason redis_memory_stats and redis_function_list could not be converted:
+    /// System.Text.Json writes an object by its runtime type, which a trimmed build cannot do.
+    /// </remarks>
+    private static JsonNode? FlattenResult(RedisResult r)
     {
         if (r.IsNull) return null;
         switch (r.Resp2Type)
         {
             case ResultType.SimpleString:
             case ResultType.BulkString:
-                return r.ToString();
+                return JsonValue.Create(r.ToString());
             case ResultType.Integer:
-                return (long)r;
+                return JsonValue.Create((long)r);
             case ResultType.Array:
                 var arr = (RedisResult[])r!;
                 // Heuristic: even-length arrays where every-other entry is a bulk-string key look like a map.
                 if (arr.Length > 0 && arr.Length % 2 == 0 &&
                     Enumerable.Range(0, arr.Length / 2).All(i => arr[i * 2].Resp2Type is ResultType.SimpleString or ResultType.BulkString))
                 {
-                    var dict = new Dictionary<string, object?>(StringComparer.Ordinal);
-                    for (int i = 0; i + 1 < arr.Length; i += 2) dict[arr[i].ToString()] = FlattenResult(arr[i + 1]);
-                    return dict;
+                    JsonObject map = McpJson.Object();
+                    for (int i = 0; i + 1 < arr.Length; i += 2) map[arr[i].ToString()] = FlattenResult(arr[i + 1]);
+                    return map;
                 }
-                return arr.Select(FlattenResult).ToArray();
+                return McpJson.Array(arr, FlattenResult);
             default:
-                return r.ToString();
+                return JsonValue.Create(r.ToString());
         }
     }
 }
+

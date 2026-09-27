@@ -1,5 +1,7 @@
+using DnaX.MCPFab;
 using System.ComponentModel;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ModelContextProtocol.Server;
 using RedisMCPSharp.Services;
 using StackExchange.Redis;
@@ -123,15 +125,14 @@ public sealed class ExecuteTool
         var fullArgs = (args ?? Array.Empty<string>()).Cast<object>().ToArray();
         var raw = await inst.Db().ExecuteAsync(verb, fullArgs).ConfigureAwait(false);
 
-        return JsonSerializer.Serialize(new
-        {
-            alias,
-            command = verb,
-            args = args ?? Array.Empty<string>(),
-            classification = new { write = isWrite, dangerous = isDangerous },
-            type = raw.Resp2Type.ToString(),
-            result = FlattenResult(raw),
-        }, JsonOpts.Default);
+        return McpJson.Object()
+            .Set("alias", alias)
+            .Set("command", verb)
+            .Set("args", McpJson.Array(args ?? Array.Empty<string>(), a => McpJson.Scalar(a)))
+            .Set("classification", McpJson.Object().Set("write", isWrite).Set("dangerous", isDangerous))
+            .Set("type", raw.Resp2Type.ToString())
+            .Set("result", FlattenResult(raw))
+            .ToJsonString();
     }
 
     [McpServerTool(Name = "redis_ft_list"),
@@ -144,11 +145,11 @@ public sealed class ExecuteTool
         try
         {
             var raw = (RedisResult[]?)await inst.Db().ExecuteAsync("FT._LIST").ConfigureAwait(false) ?? Array.Empty<RedisResult>();
-            return JsonSerializer.Serialize(new { alias, indexes = raw.Select(r => r.ToString()).ToArray() }, JsonOpts.Default);
+            return McpJson.Object().Set("alias", alias).Set("indexes", McpJson.Array(raw.Select(r => r.ToString()).ToArray(), item => McpJson.Scalar(item))).ToJsonString();
         }
         catch (RedisServerException ex) when (ex.Message.Contains("unknown command", StringComparison.OrdinalIgnoreCase))
         {
-            return JsonSerializer.Serialize(new { alias, available = false, note = "RediSearch module not loaded." }, JsonOpts.Default);
+            return McpJson.Object().Set("alias", alias).Set("available", false).Set("note", "RediSearch module not loaded.").ToJsonString();
         }
     }
 
@@ -161,9 +162,9 @@ public sealed class ExecuteTool
     {
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var raw = (RedisResult[]?)await inst.Db().ExecuteAsync("FT.INFO", index).ConfigureAwait(false) ?? Array.Empty<RedisResult>();
-        var dict = new Dictionary<string, object?>(StringComparer.Ordinal);
-        for (int i = 0; i + 1 < raw.Length; i += 2) dict[raw[i].ToString()] = FlattenResult(raw[i + 1]);
-        return JsonSerializer.Serialize(new { alias, index, info = dict }, JsonOpts.Default);
+        JsonObject info = McpJson.Object();
+        for (int i = 0; i + 1 < raw.Length; i += 2) info[raw[i].ToString()] = FlattenResult(raw[i + 1]);
+        return McpJson.Object().Set("alias", alias).Set("index", index).Set("info", info).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_ft_search"),
@@ -181,33 +182,48 @@ public sealed class ExecuteTool
                   ?? Array.Empty<RedisResult>();
         // First element = total. Then alternating (docId, [field, value, ...]) pairs.
         var total = raw.Length > 0 ? (long?)raw[0] : null;
-        var docs = new List<object>();
+        JsonArray docs = [];
         for (int i = 1; i + 1 < raw.Length; i += 2)
         {
             var docId = raw[i].ToString();
             var fields = (RedisResult[]?)raw[i + 1] ?? Array.Empty<RedisResult>();
-            var fdict = new Dictionary<string, string>(StringComparer.Ordinal);
-            for (int j = 0; j + 1 < fields.Length; j += 2) fdict[fields[j].ToString()] = fields[j + 1].ToString();
-            docs.Add(new { id = docId, fields = fdict });
+            JsonObject fdict = McpJson.Object();
+            for (int j = 0; j + 1 < fields.Length; j += 2) fdict[fields[j].ToString()] = JsonValue.Create(fields[j + 1].ToString());
+            docs.AddNode(McpJson.Object().Set("id", docId).Set("fields", fdict));
         }
-        return JsonSerializer.Serialize(new { alias, index, query, total, returned = docs.Count, docs }, JsonOpts.Default);
+        return McpJson.Object()
+            .Set("alias", alias)
+            .Set("index", index)
+            .Set("query", query)
+            .Set("total", total)
+            .Set("returned", docs.Count)
+            .Set("docs", docs)
+            .ToJsonString();
     }
 
-    private static object? FlattenResult(RedisResult r)
+    /// <summary>
+    /// Converts a RESP reply into a JSON node.
+    /// </summary>
+    /// <remarks>
+    /// Returns JsonNode rather than object so the value serialises without reflection. A RESP reply
+    /// is genuinely polymorphic - string, integer or nested array depending on the command - and as
+    /// object that made redis_execute untrimmable.
+    /// </remarks>
+    private static JsonNode? FlattenResult(RedisResult r)
     {
         if (r.IsNull) return null;
         switch (r.Resp2Type)
         {
             case ResultType.SimpleString:
             case ResultType.BulkString:
-                return r.ToString();
+                return JsonValue.Create(r.ToString());
             case ResultType.Integer:
-                return (long)r;
+                return JsonValue.Create((long)r);
             case ResultType.Array:
                 var arr = (RedisResult[])r!;
-                return arr.Select(FlattenResult).ToArray();
+                return McpJson.Array(arr, FlattenResult);
             default:
-                return r.ToString();
+                return JsonValue.Create(r.ToString());
         }
     }
 }
