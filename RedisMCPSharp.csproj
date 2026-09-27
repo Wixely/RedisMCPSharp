@@ -11,7 +11,13 @@
       to McpJson. Flipping to Trimmed before then would produce a server whose tools silently
       return {}.
     -->
-    <McpFabTrimPolicy>Analyzed</McpFabTrimPolicy>
+    <!--
+      Documentation only: Directory.Build.props is imported before this file, so the tiers keyed on
+      McpFabTrimPolicy cannot see a value set here. The release pipeline passes it as a global
+      property from its trim_policy input, which is the authority. Kept in step with that input so
+      the two do not disagree; to build a tier locally, pass -p:McpFabTrimPolicy=Trimmed.
+    -->
+    <McpFabTrimPolicy>Trimmed</McpFabTrimPolicy>
   </PropertyGroup>
 
   <ItemGroup>

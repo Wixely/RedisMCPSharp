@@ -16,4 +16,9 @@ jobs:
     uses: Wixely/DnaX/.github/workflows/mcpsharp-server.yml@main
     with:
       project_name: RedisMCPSharp
-      trim_policy: Analyzed
+      # Every payload in this server is built with McpJson, so there is no reflective JSON left for
+      # the trimmer to strip: 160 IL2026/IL3050 warnings down to zero. partial trims only the
+      # framework, leaving this code and StackExchange.Redis whole - 103 MB to 34 MB, with all 72
+      # tools verified against live Redis. full is smaller again but has never been run here.
+      trim_policy: Trimmed
+      trim_mode: partial
