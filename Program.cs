@@ -1,4 +1,6 @@
+using System.Text.Json;
 using DnaX.MCPFab;
+using ModelContextProtocol;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using RedisMCPSharp.Configuration;
@@ -22,16 +24,23 @@ public static class Program
             .Bind(builder.Configuration.GetSection(RedisOptions.SectionName));
         builder.Services.AddSingleton<RedisRegistry>();
 
+        // The SDK builds each tool's input schema from its parameter types through a fixed chain of
+        // source-generated contexts. Four tools take a Dictionary parameter, which is in none of
+        // them, so a trimmed build throws while the container is built - before Kestrel starts.
+        // Adding the context is what makes PublishTrimmed viable at all.
+        JsonSerializerOptions toolSchema = new(McpJsonUtilities.DefaultOptions);
+        toolSchema.TypeInfoResolverChain.Insert(0, Tools.RedisJsonContext.Default);
+
         // Single-engine product, so every tool class registers unconditionally. The registry
         // itself surfaces "No Redis servers configured" if Servers is empty at first call.
         builder.Mcp
-            .WithTools<Tools.DiscoveryTools>()
-            .WithTools<Tools.KeyTools>()
-            .WithTools<Tools.StringTools>()
-            .WithTools<Tools.CollectionTools>()
-            .WithTools<Tools.ClusterTools>()
-            .WithTools<Tools.DiagnosticTools>()
-            .WithTools<Tools.ExecuteTool>();
+            .WithTools<Tools.DiscoveryTools>(toolSchema)
+            .WithTools<Tools.KeyTools>(toolSchema)
+            .WithTools<Tools.StringTools>(toolSchema)
+            .WithTools<Tools.CollectionTools>(toolSchema)
+            .WithTools<Tools.ClusterTools>(toolSchema)
+            .WithTools<Tools.DiagnosticTools>(toolSchema)
+            .WithTools<Tools.ExecuteTool>(toolSchema);
 
         builder
             .Banner((services, banner) =>
