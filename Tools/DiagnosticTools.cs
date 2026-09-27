@@ -1,6 +1,7 @@
 using DnaX.MCPFab;
 using System.ComponentModel;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ModelContextProtocol.Server;
 using RedisMCPSharp.Services;
 using StackExchange.Redis;
@@ -89,14 +90,12 @@ public sealed class DiagnosticTools
     {
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var raw = (RedisResult[]?)await inst.Db().ExecuteAsync("MEMORY", "STATS").ConfigureAwait(false) ?? Array.Empty<RedisResult>();
-        var dict = new Dictionary<string, object?>(StringComparer.Ordinal);
+        JsonObject stats = McpJson.Object();
         for (int i = 0; i + 1 < raw.Length; i += 2)
         {
-            var k = raw[i].ToString();
-            var v = raw[i + 1];
-            dict[k] = FlattenResult(v);
+            stats[raw[i].ToString()] = FlattenResult(raw[i + 1]);
         }
-        return JsonSerializer.Serialize(new { alias, stats = dict }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("stats", stats).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_memory_doctor"),
@@ -315,14 +314,14 @@ public sealed class DiagnosticTools
             return McpJson.Object().Set("alias", alias).Set("supported", false).Set("note", "FUNCTION LIST requires Redis 7.0+.").ToJsonString();
 
         var raw = (RedisResult[]?)await inst.Db().ExecuteAsync("FUNCTION", "LIST").ConfigureAwait(false) ?? Array.Empty<RedisResult>();
-        var libs = raw.Select(lib =>
+        JsonArray libs = McpJson.Array(raw, lib =>
         {
             var f = (RedisResult[]?)lib ?? Array.Empty<RedisResult>();
-            var dict = new Dictionary<string, object?>(StringComparer.Ordinal);
-            for (int i = 0; i + 1 < f.Length; i += 2) dict[f[i].ToString()] = FlattenResult(f[i + 1]);
-            return dict;
+            JsonObject library = McpJson.Object();
+            for (int i = 0; i + 1 < f.Length; i += 2) library[f[i].ToString()] = FlattenResult(f[i + 1]);
+            return library;
         });
-        return JsonSerializer.Serialize(new { alias, supported = true, libraries = libs }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("supported", true).Set("libraries", libs).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_debug_object"),
@@ -347,29 +346,38 @@ public sealed class DiagnosticTools
         catch { return long.TryParse(r.ToString(), out var v) ? v : (long?)null; }
     }
 
-    private static object? FlattenResult(RedisResult r)
+    /// <summary>
+    /// Converts a RESP reply into a JSON node.
+    /// </summary>
+    /// <remarks>
+    /// Returns JsonNode rather than object so the value needs no reflection to serialise. As object
+    /// it was the sole reason redis_memory_stats and redis_function_list could not be converted:
+    /// System.Text.Json writes an object by its runtime type, which a trimmed build cannot do.
+    /// </remarks>
+    private static JsonNode? FlattenResult(RedisResult r)
     {
         if (r.IsNull) return null;
         switch (r.Resp2Type)
         {
             case ResultType.SimpleString:
             case ResultType.BulkString:
-                return r.ToString();
+                return JsonValue.Create(r.ToString());
             case ResultType.Integer:
-                return (long)r;
+                return JsonValue.Create((long)r);
             case ResultType.Array:
                 var arr = (RedisResult[])r!;
                 // Heuristic: even-length arrays where every-other entry is a bulk-string key look like a map.
                 if (arr.Length > 0 && arr.Length % 2 == 0 &&
                     Enumerable.Range(0, arr.Length / 2).All(i => arr[i * 2].Resp2Type is ResultType.SimpleString or ResultType.BulkString))
                 {
-                    var dict = new Dictionary<string, object?>(StringComparer.Ordinal);
-                    for (int i = 0; i + 1 < arr.Length; i += 2) dict[arr[i].ToString()] = FlattenResult(arr[i + 1]);
-                    return dict;
+                    JsonObject map = McpJson.Object();
+                    for (int i = 0; i + 1 < arr.Length; i += 2) map[arr[i].ToString()] = FlattenResult(arr[i + 1]);
+                    return map;
                 }
-                return arr.Select(FlattenResult).ToArray();
+                return McpJson.Array(arr, FlattenResult);
             default:
-                return r.ToString();
+                return JsonValue.Create(r.ToString());
         }
     }
 }
+

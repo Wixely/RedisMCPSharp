@@ -1,6 +1,7 @@
 using DnaX.MCPFab;
 using System.ComponentModel;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ModelContextProtocol.Server;
 using RedisMCPSharp.Services;
 using StackExchange.Redis;
@@ -177,7 +178,7 @@ public sealed class KeyTools
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var cap = Math.Max(1, Math.Min(max, reg.Options.MaxItems));
         var db = inst.Db();
-        var results = new List<object>();
+        JsonArray results = [];
 
         var endpoints = inst.IsCluster
             ? inst.Multiplexer.GetEndPoints().Select(ep => inst.Multiplexer.GetServer(ep)).Where(s => s.IsConnected && !s.IsReplica)
@@ -191,22 +192,41 @@ public sealed class KeyTools
                 var t = await db.KeyTypeAsync(k).ConfigureAwait(false);
                 if (type is not null && !string.Equals(t.ToString(), type, StringComparison.OrdinalIgnoreCase)) continue;
                 var ttl = await db.KeyTimeToLiveAsync(k).ConfigureAwait(false);
-                object? preview = t switch
+                JsonNode? preview = t switch
                 {
-                    RedisType.String => Trunc((string?)await db.StringGetAsync(k).ConfigureAwait(false), reg.Options.MaxChars),
-                    RedisType.List => (await db.ListRangeAsync(k, 0, 4).ConfigureAwait(false)).Select(v => Trunc((string?)v, 200)),
-                    RedisType.Hash => (await db.HashGetAllAsync(k).ConfigureAwait(false)).Take(5).ToDictionary(e => e.Name.ToString(), e => Trunc((string?)e.Value, 200)),
-                    RedisType.Set => (await db.SetMembersAsync(k).ConfigureAwait(false)).Take(5).Select(v => Trunc((string?)v, 200)),
-                    RedisType.SortedSet => (await db.SortedSetRangeByScoreWithScoresAsync(k, take: 5).ConfigureAwait(false)).Select(e => new { value = Trunc((string?)e.Element, 200), score = e.Score }),
+                    // JsonNode per arm rather than object: the preview really is polymorphic - the
+                    // shape follows the key's Redis type - and as object it needed reflection to
+                    // serialise, which a trimmed build cannot do.
+                    RedisType.String => JsonValue.Create(Trunc((string?)await db.StringGetAsync(k).ConfigureAwait(false), reg.Options.MaxChars)),
+                    RedisType.List => McpJson.Array(await db.ListRangeAsync(k, 0, 4).ConfigureAwait(false), v => McpJson.Scalar(Trunc((string?)v, 200))),
+                    RedisType.Hash => McpJson.Map(
+                        (await db.HashGetAllAsync(k).ConfigureAwait(false)).Take(5)
+                            .Select(e => new KeyValuePair<string, string?>(e.Name.ToString(), Trunc((string?)e.Value, 200))),
+                        v => McpJson.Scalar(v)),
+                    RedisType.Set => McpJson.Array((await db.SetMembersAsync(k).ConfigureAwait(false)).Take(5), v => McpJson.Scalar(Trunc((string?)v, 200))),
+                    RedisType.SortedSet => McpJson.Array(
+                        await db.SortedSetRangeByScoreWithScoresAsync(k, take: 5).ConfigureAwait(false),
+                        e => McpJson.Object().Set("value", Trunc((string?)e.Element, 200)).Set("score", e.Score)),
                     _ => null,
                 };
-                results.Add(new { key = k.ToString(), type = t.ToString().ToLowerInvariant(), ttlSeconds = ttl?.TotalSeconds, preview });
+                results.AddNode(McpJson.Object()
+                    .Set("key", k.ToString())
+                    .Set("type", t.ToString().ToLowerInvariant())
+                    .Set("ttlSeconds", ttl?.TotalSeconds)
+                    .Set("preview", preview));
                 if (results.Count >= cap) break;
             }
             if (results.Count >= cap) break;
         }
 
-        return JsonSerializer.Serialize(new { alias, pattern, type, returned = results.Count, truncated = results.Count == cap, items = results }, JsonOpts.Default);
+        return McpJson.Object()
+            .Set("alias", alias)
+            .Set("pattern", pattern)
+            .Set("type", type)
+            .Set("returned", results.Count)
+            .Set("truncated", results.Count == cap)
+            .Set("items", results)
+            .ToJsonString();
     }
 
     [McpServerTool(Name = "redis_search_keys"),

@@ -1,6 +1,7 @@
 using DnaX.MCPFab;
 using System.ComponentModel;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ModelContextProtocol.Server;
 using RedisMCPSharp.Services;
 using StackExchange.Redis;
@@ -73,7 +74,7 @@ public sealed class DiscoveryTools
         if (inst.IsCluster)
         {
             long total = 0;
-            var perNode = new List<object>();
+            JsonArray perNode = [];
             foreach (var ep in inst.Multiplexer.GetEndPoints())
             {
                 try
@@ -82,12 +83,12 @@ public sealed class DiscoveryTools
                     if (s.IsConnected && !s.IsReplica)
                     {
                         var c = await s.DatabaseSizeAsync().ConfigureAwait(false);
-                        total += c; perNode.Add(new { endpoint = ep.ToString(), keys = c });
+                        total += c; perNode.AddNode(McpJson.Object().Set("endpoint", ep.ToString()).Set("keys", c));
                     }
                 }
-                catch (Exception ex) { perNode.Add(new { endpoint = ep.ToString(), error = ex.Message }); }
+                catch (Exception ex) { perNode.AddNode(McpJson.Object().Set("endpoint", ep.ToString()).Set("error", ex.Message)); }
             }
-            return JsonSerializer.Serialize(new { alias, cluster = true, total, perNode }, JsonOpts.Default);
+            return McpJson.Object().Set("alias", alias).Set("cluster", true).Set("total", total).Set("perNode", perNode).ToJsonString();
         }
         else
         {

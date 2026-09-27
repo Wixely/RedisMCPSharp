@@ -1,3 +1,4 @@
+using DnaX.MCPFab;
 using System.Buffers.Binary;
 using System.Text;
 using System.Text.Json;
@@ -16,7 +17,16 @@ public static class ValueDecoder
 {
     public enum DetectedKind { Unknown, JsonObject, JsonArray, JsonScalar, Bson, Protobuf, Utf8Text, Binary }
 
-    public sealed record Decoded(DetectedKind Kind, object? Value, string? Note);
+    /// <summary>
+    /// A decoded value, carried as a JSON node rather than object.
+    /// </summary>
+    /// <remarks>
+    /// As object this was the reason redis_get_deserialised could not be trimmed: System.Text.Json
+    /// writes an object by its runtime type, which needs reflection. Every producer here already
+    /// builds JSON (a parsed document, a BSON document, a protobuf field array), so JsonNode is the
+    /// honest type as well as the trim-safe one.
+    /// </remarks>
+    public sealed record Decoded(DetectedKind Kind, JsonNode? Value, string? Note);
 
     /// <summary>
     /// Sniff the bytes and return a parsed representation when we recognise the format.
@@ -37,7 +47,7 @@ public static class ValueDecoder
             // Protobuf: harder to detect; fall back to it only when first byte's wire-type bits are valid.
             if (LooksLikeProtobuf(data) && TryDecodeProtobuf(data, out var pb)) return pb!;
             // Plain UTF-8 text.
-            if (TryDecodeUtf8(data, out var text)) return new Decoded(DetectedKind.Utf8Text, text, null);
+            if (TryDecodeUtf8(data, out var text)) return new Decoded(DetectedKind.Utf8Text, JsonValue.Create(text), null);
             return new Decoded(DetectedKind.Binary, BinarySummary(data), $"{data.Length} bytes — no known format detected");
         }
 
@@ -47,7 +57,7 @@ public static class ValueDecoder
             "bson" => TryDecodeBson(data, out var b) ? b! : new Decoded(DetectedKind.Unknown, null, "BSON parse failed"),
             "protobuf" or "proto" => TryDecodeProtobuf(data, out var p) ? p! : new Decoded(DetectedKind.Unknown, null, "Protobuf decode failed"),
             "text" or "utf8" => TryDecodeUtf8(data, out var t)
-                ? new Decoded(DetectedKind.Utf8Text, t, null)
+                ? new Decoded(DetectedKind.Utf8Text, JsonValue.Create(t), null)
                 : new Decoded(DetectedKind.Binary, BinarySummary(data), "not valid UTF-8"),
             "binary" or "bytes" => new Decoded(DetectedKind.Binary, BinarySummary(data), null),
             _ => new Decoded(DetectedKind.Unknown, null, $"unknown format '{forceFormat}'"),
@@ -248,7 +258,10 @@ public static class ValueDecoder
                     default:
                         throw new InvalidOperationException("protobuf: deprecated wire type " + wireType);
                 }
-                fields.Add(f);
+                // Typed so this binds to Add(JsonNode?) rather than the generic Add<T>, which is
+                // [RequiresUnreferencedCode].
+                JsonNode field = f;
+                fields.Add(field);
                 if (fields.Count > 256) break; // sanity cap
             }
             result = new Decoded(DetectedKind.Protobuf, fields, $"protobuf wire-format (schema-less), {data.Length} bytes");
@@ -294,15 +307,13 @@ public static class ValueDecoder
         catch { text = ""; return false; }
     }
 
-    private static object BinarySummary(byte[] data)
+    private static JsonObject BinarySummary(byte[] data)
     {
         const int preview = 64;
         var hex = Convert.ToHexString(data, 0, Math.Min(preview, data.Length));
-        return new
-        {
-            length = data.Length,
-            base64 = Convert.ToBase64String(data, 0, Math.Min(2048, data.Length)),
-            hexPreview = hex + (data.Length > preview ? "…" : ""),
-        };
+        return McpJson.Object()
+            .Set("length", data.Length)
+            .Set("base64", Convert.ToBase64String(data, 0, Math.Min(2048, data.Length)))
+            .Set("hexPreview", hex + (data.Length > preview ? "…" : ""));
     }
 }

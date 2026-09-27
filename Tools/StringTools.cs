@@ -2,6 +2,7 @@ using DnaX.MCPFab;
 using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ModelContextProtocol.Server;
 using RedisMCPSharp.Services;
 using StackExchange.Redis;
@@ -36,14 +37,18 @@ public sealed class StringTools
     {
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var values = await inst.Db().StringGetAsync(keys.Select(k => (RedisKey)k).ToArray()).ConfigureAwait(false);
-        var rows = keys.Zip(values, (k, v) =>
+        JsonArray rows = McpJson.Array(keys.Zip(values), pair =>
         {
-            var s = (string?)v;
+            var s = (string?)pair.Second;
             var trunc = s is not null && s.Length > reg.Options.MaxChars;
             if (trunc) s = s![..reg.Options.MaxChars] + $"…(+{s.Length - reg.Options.MaxChars} chars)";
-            return new { key = k, value = s, exists = !v.IsNull, truncated = trunc };
+            return McpJson.Object()
+                .Set("key", pair.First)
+                .Set("value", s)
+                .Set("exists", !pair.Second.IsNull)
+                .Set("truncated", trunc);
         });
-        return JsonSerializer.Serialize(new { alias, count = keys.Length, items = rows }, JsonOpts.Default);
+        return McpJson.Object().Set("alias", alias).Set("count", keys.Length).Set("items", rows).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_get_deserialised"),
@@ -58,16 +63,15 @@ public sealed class StringTools
         var raw = (byte[]?)await inst.Db().StringGetAsync(key).ConfigureAwait(false);
         if (raw is null) return McpJson.Object().Set("alias", alias).Set("key", key).Set("exists", false).ToJsonString();
         var decoded = ValueDecoder.Decode(raw, format);
-        return JsonSerializer.Serialize(new
-        {
-            alias,
-            key,
-            exists = true,
-            lengthBytes = raw.Length,
-            kind = decoded.Kind.ToString(),
-            note = decoded.Note,
-            value = decoded.Value,
-        }, JsonOpts.Default);
+        return McpJson.Object()
+            .Set("alias", alias)
+            .Set("key", key)
+            .Set("exists", true)
+            .Set("lengthBytes", raw.Length)
+            .Set("kind", decoded.Kind.ToString())
+            .Set("note", decoded.Note)
+            .Set("value", decoded.Value)
+            .ToJsonString();
     }
 
     [McpServerTool(Name = "redis_detect_format"),
