@@ -126,7 +126,7 @@ public sealed class RedisRegistry : IAsyncDisposable
 
         _log.LogInformation(
             "Connected to Redis alias={Alias} endpoints={Endpoints} version={Version} cluster={Cluster}",
-            entry.Alias, string.Join(",", multiplexer.GetEndPoints().Select(e => e.ToString())), version, isCluster);
+            entry.Alias, string.Join(",", multiplexer.GetEndPoints().Select(RedisEndpoints.Describe)), version, isCluster);
 
         return new RedisInstance(entry, multiplexer, version, isCluster);
     }
