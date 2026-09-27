@@ -83,10 +83,10 @@ public sealed class DiscoveryTools
                     if (s.IsConnected && !s.IsReplica)
                     {
                         var c = await s.DatabaseSizeAsync().ConfigureAwait(false);
-                        total += c; perNode.AddNode(McpJson.Object().Set("endpoint", ep.ToString()).Set("keys", c));
+                        total += c; perNode.AddNode(McpJson.Object().Set("endpoint", RedisEndpoints.Describe(ep)).Set("keys", c));
                     }
                 }
-                catch (Exception ex) { perNode.AddNode(McpJson.Object().Set("endpoint", ep.ToString()).Set("error", ex.Message)); }
+                catch (Exception ex) { perNode.AddNode(McpJson.Object().Set("endpoint", RedisEndpoints.Describe(ep)).Set("error", ex.Message)); }
             }
             return McpJson.Object().Set("alias", alias).Set("cluster", true).Set("total", total).Set("perNode", perNode).ToJsonString();
         }

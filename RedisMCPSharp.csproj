@@ -49,4 +49,22 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      This csproj sits at the repository root, so the SDK's default **/*.cs glob reaches into
+      tests/ and compiles the test sources into the server assembly - where xunit is not
+      referenced, so they fail to build and the test project never gets its own compilation.
+    -->
+    <Compile Remove="tests/**" />
+    <None Remove="tests/**" />
+    <EmbeddedResource Remove="tests/**" />
+    <Content Remove="tests/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- RedisEndpoints is internal: it is an implementation detail of how this server renders a
+         cluster endpoint, not API. Exposing it to the tests keeps it that way. -->
+    <InternalsVisibleTo Include="RedisMCPSharp.Tests" />
+  </ItemGroup>
+
 </Project>
