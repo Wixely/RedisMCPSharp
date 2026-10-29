@@ -32,20 +32,31 @@ public sealed class KeyTools
     {
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var type = await inst.Db().KeyTypeAsync(key).ConfigureAwait(false);
-        return McpJson.Object().Set("alias", alias).Set("key", key).Set("type", type.ToString().ToLowerInvariant()).ToJsonString();
+        return McpJson.Object().Set("alias", alias).Set("key", key).Set("type", RedisTypeNames.Name(type)).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_ttl"),
-     Description("Return seconds until expiry (-1 = no TTL set, -2 = key doesn't exist). Also returns ms precision via pttl.")]
+     Description("Return seconds until expiry (-1 = no TTL set, -2 = key doesn't exist). Also returns ms precision via pttl, and `exists` so the two cases can't be confused.")]
     public static async Task<string> Ttl(
         RedisRegistry reg,
         [Description("Key.")] string key,
         [Description("Alias. Omit for default.")] string? alias = null)
     {
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
-        var t = await inst.Db().KeyTimeToLiveAsync(key).ConfigureAwait(false);
-        return McpJson.Object().Set("alias", alias).Set("key", key).Set("ttlSeconds", t?.TotalSeconds).Set("ttlMs", t?.TotalMilliseconds).ToJsonString();
+        // Raw PTTL rather than KeyTimeToLiveAsync: the latter maps both -1 and -2 to null, which
+        // made "no such key" and "no expiry" indistinguishable and dropped the field entirely.
+        var pttl = (long)await inst.Db().ExecuteAsync("PTTL", key).ConfigureAwait(false);
+        return TtlPayload(alias, key, pttl).ToJsonString();
     }
+
+    /// <summary>Shapes a PTTL reply, keeping Redis' -1 / -2 sentinels in both fields.</summary>
+    internal static JsonObject TtlPayload(string? alias, string key, long pttlMs) =>
+        McpJson.Object()
+            .Set("alias", alias)
+            .Set("key", key)
+            .Set("exists", pttlMs != -2)
+            .Set("ttlSeconds", pttlMs < 0 ? pttlMs : pttlMs / 1000.0)
+            .Set("ttlMs", pttlMs);
 
     [McpServerTool(Name = "redis_expire"),
      Description("Set or update a key's TTL. Refused when Redis:ReadOnly=true.")]
@@ -131,11 +142,12 @@ public sealed class KeyTools
     public static async Task<string> Scan(
         RedisRegistry reg,
         [Description("Glob-style key pattern. Examples: \"user:*\", \"session:??:active\", \"*\".")] string pattern = "*",
-        [Description("Filter by type: string | list | hash | set | zset | stream. Empty = all.")] string? type = null,
+        [Description("Filter by type: string | list | hash | set | zset | stream | vectorset. Empty = all.")] string? type = null,
         [Description("Max keys to return. Default = Redis:MaxItems.")] int? max = null,
         [Description("Alias. Omit for default.")] string? alias = null,
         CancellationToken ct = default)
     {
+        var filter = RedisTypeNames.ParseFilter(type);
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var cap = Math.Max(1, Math.Min(max ?? reg.Options.MaxItems, reg.Options.MaxItems));
         var pageSize = reg.Options.DefaultScanPageSize;
@@ -151,10 +163,10 @@ public sealed class KeyTools
             ct.ThrowIfCancellationRequested();
             await foreach (var k in server.KeysAsync(database: inst.IsCluster ? -1 : inst.Entry.Database, pattern: pattern, pageSize: pageSize).ConfigureAwait(false))
             {
-                if (type is not null)
+                if (filter is not null)
                 {
                     var t = await inst.Db().KeyTypeAsync(k).ConfigureAwait(false);
-                    if (!string.Equals(t.ToString(), type, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (t != filter) continue;
                 }
                 keys.Add(k.ToString());
                 if (keys.Count >= cap) break;
@@ -162,19 +174,20 @@ public sealed class KeyTools
             if (keys.Count >= cap) break;
         }
 
-        return McpJson.Object().Set("alias", alias).Set("pattern", pattern).Set("type", type).Set("returned", keys.Count).Set("truncated", keys.Count == cap).Set("keys", McpJson.Array(keys, item => McpJson.Scalar(item))).ToJsonString();
+        return McpJson.Object().Set("alias", alias).Set("pattern", pattern).Set("type", filter is null ? null : RedisTypeNames.Name(filter.Value)).Set("returned", keys.Count).Set("truncated", keys.Count == cap).Set("keys", McpJson.Array(keys, item => McpJson.Scalar(item))).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_scan_with_values"),
-     Description("Combines SCAN + GET-style fetch. For each matched key, returns key, type, ttl, and (for strings/hashes/sets/lists with small contents) a value preview. Heavier than scan() — cap with `max` carefully.")]
+     Description("Combines SCAN + GET-style fetch. For each matched key, returns key, type, ttl (-1 = no TTL), and (for strings/hashes/sets/lists with small contents) a value preview. Heavier than scan() — cap with `max` carefully.")]
     public static async Task<string> ScanWithValues(
         RedisRegistry reg,
         [Description("Glob-style key pattern.")] string pattern = "*",
-        [Description("Filter by type. Empty = all.")] string? type = null,
+        [Description("Filter by type: string | list | hash | set | zset | stream | vectorset. Empty = all.")] string? type = null,
         [Description("Max keys to return. Default 100.")] int max = 100,
         [Description("Alias. Omit for default.")] string? alias = null,
         CancellationToken ct = default)
     {
+        var filter = RedisTypeNames.ParseFilter(type);
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var cap = Math.Max(1, Math.Min(max, reg.Options.MaxItems));
         var db = inst.Db();
@@ -190,7 +203,7 @@ public sealed class KeyTools
             await foreach (var k in server.KeysAsync(database: inst.IsCluster ? -1 : inst.Entry.Database, pattern: pattern, pageSize: reg.Options.DefaultScanPageSize).ConfigureAwait(false))
             {
                 var t = await db.KeyTypeAsync(k).ConfigureAwait(false);
-                if (type is not null && !string.Equals(t.ToString(), type, StringComparison.OrdinalIgnoreCase)) continue;
+                if (filter is not null && t != filter) continue;
                 var ttl = await db.KeyTimeToLiveAsync(k).ConfigureAwait(false);
                 JsonNode? preview = t switch
                 {
@@ -211,8 +224,9 @@ public sealed class KeyTools
                 };
                 results.AddNode(McpJson.Object()
                     .Set("key", k.ToString())
-                    .Set("type", t.ToString().ToLowerInvariant())
-                    .Set("ttlSeconds", ttl?.TotalSeconds)
+                    .Set("type", RedisTypeNames.Name(t))
+                    // The key exists (SCAN just returned it), so null can only mean "no expiry".
+                    .Set("ttlSeconds", ttl?.TotalSeconds ?? -1)
                     .Set("preview", preview));
                 if (results.Count >= cap) break;
             }
@@ -222,7 +236,7 @@ public sealed class KeyTools
         return McpJson.Object()
             .Set("alias", alias)
             .Set("pattern", pattern)
-            .Set("type", type)
+            .Set("type", filter is null ? null : RedisTypeNames.Name(filter.Value))
             .Set("returned", results.Count)
             .Set("truncated", results.Count == cap)
             .Set("items", results)

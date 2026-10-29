@@ -48,10 +48,14 @@ public sealed class DiscoveryTools
     {
         var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var server = inst.FirstServer();
-        var groups = string.IsNullOrWhiteSpace(section)
-            ? await server.InfoAsync().ConfigureAwait(false)
-            : await server.InfoAsync(section).ConfigureAwait(false);
-        return McpJson.Object().Set("alias", alias).Set("section", section).Set("sections", McpJson.Array(groups, g => McpJson.Object().Set("name", g.Key).Set("values", McpJson.Map(g.ToDictionary(kv => kv.Key, kv => kv.Value), entry => McpJson.Scalar(entry))))).ToJsonString();
+        // Raw INFO, not server.InfoAsync(): the typed call is admin-only in StackExchange.Redis and
+        // threw on every alias. Enabling AllowAdmin instead would also unlock FLUSHALL / SHUTDOWN
+        // through the typed API, outside the ReadOnly / AllowDestructive gates. See RedisInfo.
+        var raw = string.IsNullOrWhiteSpace(section)
+            ? await server.ExecuteAsync("INFO").ConfigureAwait(false)
+            : await server.ExecuteAsync("INFO", section).ConfigureAwait(false);
+        var groups = RedisInfo.Parse(raw.ToString());
+        return McpJson.Object().Set("alias", alias).Set("section", section).Set("sections", McpJson.Array(groups, g => McpJson.Object().Set("name", g.Key).Set("values", McpJson.Map(g.Value, entry => McpJson.Scalar(entry))))).ToJsonString();
     }
 
     [McpServerTool(Name = "redis_version_info"),
