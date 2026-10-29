@@ -193,6 +193,23 @@ Every tool name is prefixed with `redis_` to avoid collisions when an agent has 
 servers attached (verbs like `get` / `set` / `execute` are too generic on their own). Every
 tool accepts an optional `alias` parameter — omit it to use the default alias.
 
+### Errors
+
+A failed call returns `isError: true` with the same envelope `redis_test_connection` uses, so
+an agent can see why it failed instead of `An error occurred invoking '<tool>'`:
+
+```json
+{"ok":false,"code":"wrong_type","error":"WRONGTYPE Operation against a key holding the wrong kind of value. Key 'k' holds a string. Read it with redis_get.","detail":{"key":"k","actualType":"string"},"tool":"redis_hgetall"}
+```
+
+| `code` | Meaning |
+|---|---|
+| `redis_error` | Redis rejected the command; `error` carries the server's own text (`ERR wrong number of arguments …`, `ERR unknown command …`). |
+| `wrong_type` | `WRONGTYPE`, plus the key's actual type when it can be looked up. |
+| `redis_command_refused` | StackExchange.Redis refused the command client-side. |
+| `redis_unavailable` / `redis_timeout` | Could not reach the server / the command timed out. |
+| `tool_refused` | A deliberate refusal: read-only mode, unknown alias, invalid argument (e.g. an unknown `type` filter or `redis_execute` verb). |
+
 ### Discovery
 - `redis_list_servers` — **call first.** Every configured alias + description + default. The
   handle every other tool expects.
@@ -203,8 +220,13 @@ tool accepts an optional `alias` parameter — omit it to use the default alias.
 
 ### Keys
 - `redis_exists`, `redis_type`, `redis_ttl`, `redis_expire`, `redis_persist`, `redis_rename`, `redis_del`
+  - `redis_type` reports Redis' own names (`zset`, not `sortedset`).
+  - `redis_ttl` returns `exists`, plus `ttlSeconds` / `ttlMs` with Redis' sentinels: `-1` = no
+    TTL, `-2` = key doesn't exist.
 - `redis_object_encoding`, `redis_object_idletime` — internal representation + idle time
-- `redis_scan` — non-blocking key scan, optionally filtered by type. Cluster-aware.
+- `redis_scan` — non-blocking key scan, optionally filtered by type. Cluster-aware. `type` is one
+  of `string`, `list`, `hash`, `set`, `zset`, `stream`, `vectorset`; anything else is an error
+  listing those values.
 - `redis_scan_with_values` — scan + value previews (string head, list head, hash slice, set slice, zset slice)
 - `redis_search_keys` — alias for `redis_scan` with a glob
 

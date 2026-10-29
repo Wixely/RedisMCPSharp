@@ -118,10 +118,18 @@ public sealed class ExecuteTool
         var isDangerous = DangerousCommands.Contains(verb) || (firstArg is not null && DangerousSubcommands.Contains(composite));
         var isWrite = !SafeReadCommands.Contains(verb) || isDangerous;
 
+        var inst = await reg.GetAsync(alias).ConfigureAwait(false);
+
+        // Anything off the safe-list is classed as a write, so a misspelt verb used to be refused
+        // as "blocked: read-only mode" - sending the caller off to flip Redis:ReadOnly for a command
+        // that doesn't exist. Ask the server before blaming read-only. Only paid on that refusal path.
+        if (isWrite && reg.IsReadOnly && await IsUnknownCommandAsync(inst, verb).ConfigureAwait(false))
+            throw new ArgumentException(
+                $"Unknown command '{verb}': the server does not recognise it. Check the spelling, or whether the module that provides it is loaded (redis_module_list).");
+
         if (isWrite) reg.RequireWritable($"execute({verb})");
         if (isDangerous) reg.RequireDangerous($"execute({composite})");
 
-        var inst = await reg.GetAsync(alias).ConfigureAwait(false);
         var fullArgs = (args ?? Array.Empty<string>()).Cast<object>().ToArray();
         var raw = await inst.Db().ExecuteAsync(verb, fullArgs).ConfigureAwait(false);
 
@@ -200,6 +208,28 @@ public sealed class ExecuteTool
             .Set("docs", docs)
             .ToJsonString();
     }
+
+    /// <summary>
+    /// COMMAND INFO replies with one entry per name, nil for a name the server doesn't know.
+    /// If COMMAND itself is unavailable (ACLs, proxies), report "not unknown" so the caller still
+    /// gets the read-only refusal rather than a guess.
+    /// </summary>
+    private static async Task<bool> IsUnknownCommandAsync(RedisInstance inst, string verb)
+    {
+        try
+        {
+            return IsUnknownCommand(await inst.Db().ExecuteAsync("COMMAND", "INFO", verb).ConfigureAwait(false));
+        }
+        catch (Exception ex) when (ex is RedisException or RedisTimeoutException)
+        {
+            return false;
+        }
+    }
+
+    internal static bool IsUnknownCommand(RedisResult commandInfo) =>
+        commandInfo.Resp2Type == ResultType.Array
+        && (RedisResult[]?)commandInfo is { Length: > 0 } entries
+        && entries[0].IsNull;
 
     /// <summary>
     /// Converts a RESP reply into a JSON node.

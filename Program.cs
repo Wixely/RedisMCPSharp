@@ -2,7 +2,9 @@ using System.Text.Json;
 using DnaX.MCPFab;
 using ModelContextProtocol;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.Server;
 using RedisMCPSharp.Configuration;
 using RedisMCPSharp.Services;
 
@@ -41,6 +43,11 @@ public static class Program
             .WithTools<Tools.ClusterTools>(toolSchema)
             .WithTools<Tools.DiagnosticTools>(toolSchema)
             .WithTools<Tools.ExecuteTool>(toolSchema);
+
+        // Redis' own error text ("WRONGTYPE ...", "ERR wrong number of arguments ...") instead of
+        // MCPFab's type-only fallback. Registered after MCPFab's filter, so it runs inside it.
+        builder.Services.AddOptions<McpServerOptions>().Configure<ILoggerFactory>((options, loggerFactory) =>
+            options.Filters.Request.CallToolFilters.Add(Tools.RedisToolErrors.Create(loggerFactory)));
 
         builder
             .Banner((services, banner) =>
